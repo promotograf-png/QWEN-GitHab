@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>График видеоцеха — октябрь 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f7fa; padding: 20px; }
+.container { max-width: 1600px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 24px; }
+h1 { color: #2c3e50; margin-bottom: 8px; font-size: 24px; }
+.subtitle { color: #7f8c8d; margin-bottom: 20px; font-size: 14px; }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+.controls button { padding: 10px 18px; border: none; border-radius: 8px; background: #3498db; color: white; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+.controls button:hover { background: #2980b9; }
+.controls button.secondary { background: #95a5a6; }
+.controls button.secondary:hover { background: #7f8c8d; }
+.controls button.danger { background: #e74c3c; }
+.controls button.danger:hover { background: #c0392b; }
+.controls button.success { background: #27ae60; }
+.controls button.success:hover { background: #229954; }
+.info { display: flex; gap: 20px; margin-bottom: 16px; font-size: 14px; color: #555; }
+.info span { background: #ecf0f1; padding: 6px 12px; border-radius: 6px; }
+.table-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid #e0e0e0; }
+table { border-collapse: collapse; width: 100%; min-width: 1200px; font-size: 13px; }
+th, td { border: 1px solid #d0d0d0; padding: 6px 8px; text-align: center; }
+th { background: #34495e; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+th.col-bs { background: #5b7a99; }
+th.col-ms { background: #6b8cae; }
+th.col-ks { background: #7b9dc3; }
+th.col-zrk { background: #8baed8; }
+th.col-tg { background: #9bbfed; }
+th.col-eng1 { background: #e8f5e9 !important; color: #2e7d32; }
+th.col-eng2 { background: #ffe8e1 !important; color: #c62828; }
+th.col-eng3 { background: #fffde7 !important; color: #f57f17; }
+th.col-eng4 { background: #e3f2fd !important; color: #1565c0; }
+td.day-col { background: #f8f9fa; font-weight: 600; width: 50px; }
+td.dow-col { background: #f0f0f0; font-size: 11px; color: #666; width: 40px; }
+td.weekend { background: #ffebee; }
+td[contenteditable="true"] { cursor: text; min-width: 120px; text-align: left; }
+td[contenteditable="true"]:focus { outline: 2px solid #3498db; outline-offset: -2px; background: #fffde7 !important; }
+td.valid-event { background: #fff9c4 !important; color: #000 !important; }
+td.zero-coeff { background: #ffffff !important; color: #ff6600 !important; }
+td.not-found { background: #ffffff !important; color: #000 !important; }
+.summary-row td { background: #ecf0f1; font-weight: 600; }
+.status-bar { margin-top: 16px; padding: 10px 14px; background: #ecf0f1; border-radius: 6px; font-size: 13px; color: #2c3e50; font-family: 'Consolas', monospace; }
+.hint { margin-top: 10px; font-size: 12px; color: #7f8c8d; }
+.legend { display: flex; gap: 14px; margin-top: 12px; font-size: 12px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-color { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>График видеоцеха — октябрь 2026</h1>
+  <div class="subtitle">Система автоматизации учёта выходов инженеров</div>
+  
+  <div class="controls">
+    <button onclick="loadRepertuar()">📂 Загрузить репертуар</button>
+    <button onclick="loadSchedule()" class="secondary">📂 Загрузить расписание</button>
+    <button onclick="exportCSV()" class="success">💾 Экспорт CSV</button>
+    <button onclick="clearAssignments()" class="danger">🗑️ Очистить назначения</button>
+    <button onclick="exportToGoogle()" class="secondary">📤 Выгрузить в Google Sheets</button>
+  </div>
+  
+  <div class="info">
+    <span id="repStatus">📋 Репертуар: не загружен</span>
+    <span id="showCount">🎭 Спектаклей: 0</span>
+  </div>
+  
+  <div class="table-wrapper">
+    <table id="scheduleTable">
+      <thead>
+        <tr>
+          <th>Число</th>
+          <th>День</th>
+          <th class="col-bs">БС</th>
+          <th class="col-ms">МС</th>
+          <th class="col-ks">КС</th>
+          <th class="col-zrk">ЗРК</th>
+          <th class="col-tg">ТГ</th>
+          <th class="col-eng1">ИНЖ1</th>
+          <th class="col-eng2">ИНЖ2</th>
+          <th class="col-eng3">ИНЖ3</th>
+          <th class="col-eng4">ИНЖ4</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+      <tfoot>
+        <tr class="summary-row">
+          <td colspan="2">Рабочих дней</td>
+          <td id="sum-bs">0</td>
+          <td id="sum-ms">0</td>
+          <td id="sum-ks">0</td>
+          <td id="sum-zrk">0</td>
+          <td id="sum-tg">0</td>
+          <td id="sum-eng1">0</td>
+          <td id="sum-eng2">0</td>
+          <td id="sum-eng3">0</td>
+          <td id="sum-eng4">0</td>
+        </tr>
+        <tr class="summary-row">
+          <td colspan="2">Сумма коэффициентов</td>
+          <td id="coeff-bs">0.00</td>
+          <td id="coeff-ms">0.00</td>
+          <td id="coeff-ks">0.00</td>
+          <td id="coeff-zrk">0.00</td>
+          <td id="coeff-tg">0.00</td>
+          <td id="coeff-eng1">0.00</td>
+          <td id="coeff-eng2">0.00</td>
+          <td id="coeff-eng3">0.00</td>
+          <td id="coeff-eng4">0.00</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color" style="background:#fff9c4"></div>Спектакль найден, коэф. > 0</div>
+    <div class="legend-item"><div class="legend-color" style="background:#fff;color:#ff6600;font-weight:bold">!</div>Спектакль найден, коэф. = 0</div>
+    <div class="legend-item"><div class="legend-color" style="background:#fff"></div>Не найден / пусто</div>
+  </div>
+  
+  <div class="hint">
+    ← → между площадками · ↑ ↓ между днями · Tab — вправо · Enter — вниз · Del — очистить · Клик — вход в правку
+  </div>
+  
+  <div class="status-bar" id="statusBar">[00:00:00] Готов к работе</div>
+</div>
+
+<script>
+// ============ ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ============
+let repertuarData = {};
+let activeCell = null;
+let isEditing = false;
+
+const DAYS_OF_WEEK = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const MONTH = 10; // октябрь
+const YEAR = 2026;
+const DAYS_IN_MONTH = 31;
+
+// ============ ИНИЦИАЛИЗАЦИЯ ============
+document.addEventListener('DOMContentLoaded', () => {
+    buildTable();
+    setupKeyboardNavigation();
+    updateStatus('Готов к работе. Загрузите репертуар.');
+});
+
+// ============ ПОСТРОЕНИЕ ТАБЛИЦЫ ============
+function buildTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    
+    for (let day = 1; day <= DAYS_IN_MONTH; day++) {
+        const date = new Date(YEAR, MONTH - 1, day);
+        const dow = date.getDay();
+        const dowName = DAYS_OF_WEEK[dow];
+        const isWeekend = (dow === 0 || dow === 6);
+        
+        const tr = document.createElement('tr');
+        
+        // Число
+        const tdDay = document.createElement('td');
+        tdDay.className = 'day-col' + (isWeekend ? ' weekend' : '');
+        tdDay.textContent = day;
+        tr.appendChild(tdDay);
+        
+        // День недели
+        const tdDow = document.createElement('td');
+        tdDow.className = 'dow-col' + (isWeekend ? ' weekend' : '');
+        tdDow.textContent = dowName;
+        tr.appendChild(tdDow);
+        
+        // Площадки: БС, МС, КС, ЗРК, ТГ
+        for (let i = 0; i < 5; i++) {
+            const td = document.createElement('td');
+            td.contentEditable = 'true';
+            td.dataset.col = i; // 0-4 площадки
+            td.dataset.row = day - 1;
+            td.dataset.type = 'venue';
+            if (isWeekend) td.classList.add('weekend');
+            td.addEventListener('focus', onCellFocus);
+            td.addEventListener('blur', onCellBlur);
+            td.addEventListener('keydown', onCellKeydown);
+            tr.appendChild(td);
+        }
+        
+        // Инженеры: ИНЖ1-4
+        for (let i = 0; i < 4; i++) {
+            const td = document.createElement('td');
+            td.contentEditable = 'true';
+            td.dataset.col = 5 + i; // 5-8 инженеры
+            td.dataset.row = day - 1;
+            td.dataset.type = 'engineer';
+            if (isWeekend) td.classList.add('weekend');
+            td.addEventListener('focus', onCellFocus);
+            td.addEventListener('blur', onCellBlur);
+            td.addEventListener('keydown', onCellKeydown);
+            tr.appendChild(td);
+        }
+        
+        tbody.appendChild(tr);
+    }
+}
+
+// ============ ЗАГРУЗКА РЕПЕРТУАРА ============
+function loadRepertuar() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
+            
+            repertuarData = {};
+            let count = 0;
+            
+            for (let i = 1; i < jsonData.length; i++) {
+                const row = jsonData[i];
+                if (!row[0] && row[0] !== 0) continue;
+                
+                const rawName = String(row[0]).trim();
+                if (!rawName) continue;
+                
+                // Нормализация: UPPERCASE, удаление кавычек, лишних пробелов
+                const name = rawName.toUpperCase().replace(/['"«»„"]/g, '').replace(/\s+/g, ' ').trim();
+                
+                repertuarData[name] = {
+                    coefficient: parseFloat(row[1]) || 0,
+                    technicianCoeff: parseFloat(row[2]) || 0,
+                    engineersCount: parseInt(row[3]) || 1,
+                    knowledge: {
+                        eng1: String(row[4] || '').trim(),
+                        eng2: String(row[5] || '').trim(),
+                        eng3: String(row[6] || '').trim()
+                    },
+                    rawName: rawName
+                };
+                count++;
+            }
+            
+            document.getElementById('repStatus').textContent = `📋 Репертуар: ${file.name}`;
+            document.getElementById('showCount').textContent = `🎭 Спектаклей: ${count}`;
+            updateStatus(`Репертуар загружен: ${count} спектаклей`);
+            
+            // Перевалидировать все заполненные ячейки
+            revalidateAll();
+            
+        } catch (error) {
+            updateStatus('❌ Ошибка загрузки репертуара: ' + error.message);
+            console.error(error);
+        }
+    };
+    
+    input.click();
+}
+
+// ============ ЗАГРУЗКА РАСПИСАНИЯ ============
+function loadSchedule() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        try {
+            const data = await file.arrayBuffer();
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1, defval: ''});
+            
+            const tbody = document.getElementById('tableBody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            for (let i = 0; i < jsonData.length; i++) {
+                const rowData = jsonData[i];
+                if (!rowData[0]) continue;
+                
+                const dayNum = parseInt(rowData[0]);
+                if (isNaN(dayNum) || dayNum < 1 || dayNum > DAYS_IN_MONTH) continue;
+                
+                const tr = rows[dayNum - 1];
+                if (!tr) continue;
+                
+                const editableCells = Array.from(tr.querySelectorAll('td[contenteditable="true"]'));
+                
+                // Колонки C-G (индексы 2-6 в Excel) → первые 5 ячеек (площадки)
+                for (let j = 2; j <= 6 && (j - 2) < editableCells.length; j++) {
+                    const value = rowData[j];
+                    if (value !== undefined && value !== null && String(value).trim() !== '') {
+                        editableCells[j - 2].textContent = String(value).trim();
+                        validateCell(editableCells[j - 2]);
+                    }
+                }
+            }
+            
+            updateStatus('Расписание загружено из файла');
+            recalculateTotals();
+            
+        } catch (error) {
+            updateStatus('❌ Ошибка загрузки: ' + error.message);
+            console.error(error);
+        }
+    };
+    
+    input.click();
+}
+
+// ============ ВАЛИДАЦИЯ ЯЧЕЙКИ ============
+function validateCell(cell) {
+    const text = (cell.textContent || '').trim();
+    
+    // Сброс стилей
+    cell.classList.remove('valid-event', 'zero-coeff', 'not-found');
+    cell.style.color = '';
+    cell.style.backgroundColor = '';
+    
+    if (!text) return;
+    
+    // Разделяем события через "+"
+    const events = text.split('+').map(s => s.trim()).filter(s => s);
+    
+    let hasValid = false;
+    let hasZeroCoeff = false;
+    
+    for (const event of events) {
+        const showName = extractShowName(event);
+        if (!showName) continue;
+        
+        const normalized = showName.toUpperCase().replace(/['"«»„"]/g, '').replace(/\s+/g, ' ').trim();
+        
+        if (repertuarData[normalized]) {
+            if (repertuarData[normalized].coefficient > 0) {
+                hasValid = true;
+            } else {
+                hasZeroCoeff = true;
+            }
+        }
+    }
+    
+    // Применяем стили по ТЗ
+    if (hasValid) {
+        cell.classList.add('valid-event');
+        // Текст: черный, Фон: #fff9c4
+    } else if (hasZeroCoeff) {
+        cell.classList.add('zero-coeff');
+        // Текст: ярко-оранжевый, Фон: белый
+    }
+    // Если не найден — текст и фон остаются по умолчанию (черный/белый)
+}
+
+// Извлечение названия спектакля из записи типа "ГАМЛЕТ 19.00" или "РЕП ГАМЛЕТ"
+function extractShowName(eventText) {
+    if (!eventText) return '';
+    
+    // Убираем служебные слова в начале
+    let cleaned = eventText.trim();
+    
+    // Удаляем время в конце (формат HH:MM или H:MM)
+    cleaned = cleaned.replace(/\s+\d{1,2}:\d{2}\s*$/, '');
+    
+    // Удаляем префикс "РЕП " если есть
+    cleaned = cleaned.replace(/^РЕП\s+/i, '');
+    
+    // Если остались специальные команды типа СЪЕМКА, МОНТ, ВМОНТ — они не в репертуаре
+    if (/^(СЪЕМКА|МОНТ|ВМОНТ)$/i.test(cleaned)) {
+        return cleaned.toUpperCase();
+    }
+    
+    return cleaned.trim();
+}
+
+// ============ СОБЫТИЯ ЯЧЕЕК ============
+function onCellFocus(e) {
+    activeCell = e.target;
+    isEditing = true;
+    placeCursorAtEnd(e.target);
+}
+
+function onCellBlur(e) {
+    isEditing = false;
+    validateCell(e.target);
+    recalculateTotals();
+}
+
+function onCellKeydown(e) {
+    const cell = e.target;
+    const tr = cell.closest('tr');
+    const tbody = document.getElementById('tableBody');
+    const allRows = Array.from(tbody.querySelectorAll('tr'));
+    const rowIndex = allRows.indexOf(tr);
+    const editableCells = Array.from(tr.querySelectorAll('td[contenteditable="true"]'));
+    const colIndex = editableCells.indexOf(cell);
+    
+    // Если идет редактирование текста — стрелки работают как обычно (навигация по тексту)
+    // Но если курсор в начале/конце — переходим к соседней ячейке
+    if (isEditing && document.activeElement === cell) {
+        const sel = window.getSelection();
+        const atStart = sel.anchorOffset === 0 && sel.focusOffset === 0;
+        const textLen = (cell.textContent || '').length;
+        const atEnd = sel.anchorOffset === textLen && sel.focusOffset === textLen;
+        
+        if (e.key === 'ArrowLeft' && atStart) {
+            // Переход к предыдущей ячейке
+            if (colIndex > 0) {
+                e.preventDefault();
+                cell.blur();
+                editableCells[colIndex - 1].focus();
+            }
+            return;
+        }
+        if (e.key === 'ArrowRight' && atEnd) {
+            // Переход к следующей ячейке
+            if (colIndex < editableCells.length - 1) {
+                e.preventDefault();
+                cell.blur();
+                editableCells[colIndex + 1].focus();
+            }
+            return;
+        }
+        
+        // Стрелки вверх/вниз во время редактирования — выход и переход
+        if (e.key === 'ArrowUp') {
+            if (rowIndex > 0) {
+                e.preventDefault();
+                cell.blur();
+                const prevRow = allRows[rowIndex - 1];
+                const prevCells = Array.from(prevRow.querySelectorAll('td[contenteditable="true"]'));
+                if (prevCells[colIndex]) prevCells[colIndex].focus();
+            }
+            return;
+        }
+        if (e.key === 'ArrowDown') {
+            if (rowIndex < allRows.length - 1) {
+                e.preventDefault();
+                cell.blur();
+                const nextRow = allRows[rowIndex + 1];
+                const nextCells = Array.from(nextRow.querySelectorAll('td[contenteditable="true"]'));
+                if (nextCells[colIndex]) nextCells[colIndex].focus();
+            }
+            return;
+        }
+    }
+    
+    // Навигация без редактирования
+    switch(e.key) {
+        case 'ArrowLeft':
+            if (colIndex > 0) {
+                e.preventDefault();
+                editableCells[colIndex - 1].focus();
+            }
+            break;
+        case 'ArrowRight':
+            if (colIndex < editableCells.length - 1) {
+                e.preventDefault();
+                editableCells[colIndex + 1].focus();
+            }
+            break;
+        case 'ArrowUp':
+            if (rowIndex > 0) {
+                e.preventDefault();
+                const prevCells = Array.from(allRows[rowIndex - 1].querySelectorAll('td[contenteditable="true"]'));
+                if (prevCells[colIndex]) prevCells[colIndex].focus();
+            }
+            break;
+        case 'ArrowDown':
+        case 'Enter':
+            if (rowIndex < allRows.length - 1) {
+                e.preventDefault();
+                const nextCells = Array.from(allRows[rowIndex + 1].querySelectorAll('td[contenteditable="true"]'));
+                if (nextCells[colIndex]) nextCells[colIndex].focus();
+            }
+            break;
+        case 'Tab':
+            e.preventDefault();
+            if (e.shiftKey) {
+                // Shift+Tab — назад
+                if (colIndex > 0) {
+                    editableCells[colIndex - 1].focus();
+                } else if (rowIndex > 0) {
+                    const prevCells = Array.from(allRows[rowIndex - 1].querySelectorAll('td[contenteditable="true"]'));
+                    prevCells[prevCells.length - 1].focus();
+                }
+            } else {
+                // Tab — вперед
+                if (colIndex < editableCells.length - 1) {
+                    editableCells[colIndex + 1].focus();
+                } else if (rowIndex < allRows.length - 1) {
+                    const nextCells = Array.from(allRows[rowIndex + 1].querySelectorAll('td[contenteditable="true"]'));
+                    nextCells[0].focus();
+                }
+            }
+            break;
+        case 'Delete':
+            e.preventDefault();
+            cell.textContent = '';
+            cell.classList.remove('valid-event', 'zero-coeff', 'not-found');
+            cell.style.color = '';
+            cell.style.backgroundColor = '';
+            recalculateTotals();
+            break;
+    }
+}
+
+// ============ НАВИГАЦИЯ ============
+function setupKeyboardNavigation() {
+    // Глобальные горячие клавиши обрабатываются в onCellKeydown
+}
+
+function placeCursorAtEnd(element) {
+    element.focus();
+    const range = document.createRange();
+    const sel = window.getSelection();
+    if (element.childNodes.length > 0) {
+        const lastNode = element.childNodes[element.childNodes.length - 1];
+        range.setStartAfter(lastNode);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+    } else {
+        range.selectNodeContents(element);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+}
+
+// ============ ПЕРЕВАЛИДАЦИЯ ============
+function revalidateAll() {
+    const cells = document.querySelectorAll('td[contenteditable="true"]');
+    cells.forEach(cell => {
+        if (cell.textContent.trim()) {
+            validateCell(cell);
+        }
+    });
+}
+
+// ============ ПОДСЧЁТ ИТОГОВ ============
+function recalculateTotals() {
+    const tbody = document.getElementById('tableBody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    const venueCounts = [0, 0, 0, 0, 0]; // БС, МС, КС, ЗРК, ТГ
+    const venueCoeffs = [0, 0, 0, 0, 0];
+    const engCounts = [0, 0, 0, 0];
+    const engCoeffs = [0, 0, 0, 0];
+    
+    rows.forEach(tr => {
+        const cells = Array.from(tr.querySelectorAll('td[contenteditable="true"]'));
+        
+        // Площадки (0-4)
+        for (let i = 0; i < 5; i++) {
+            const text = cells[i].textContent.trim();
+            if (text) {
+                venueCounts[i]++;
+                const events = text.split('+').map(s => s.trim()).filter(s => s);
+                for (const event of events) {
+                    const name = extractShowName(event).toUpperCase().replace(/['"«»„"]/g, '').replace(/\s+/g, ' ').trim();
+                    if (repertuarData[name]) {
+                        venueCoeffs[i] += repertuarData[name].coefficient;
+                    }
+                }
+            }
+        }
+        
+        // Инженеры (5-8)
+        for (let i = 0; i < 4; i++) {
+            const text = cells[5 + i].textContent.trim();
+            if (text) {
+                engCounts[i]++;
+                const events = text.split('+').map(s => s.trim()).filter(s => s);
+                for (const event of events) {
+                    const name = extractShowName(event).toUpperCase().replace(/['"«»„"]/g, '').replace(/\s+/g, ' ').trim();
+                    if (repertuarData[name]) {
+                        engCoeffs[i] += repertuarData[name].coefficient;
+                    }
+                }
+            }
+        }
+    });
+    
+    // Обновляем UI
+    const venueIds = ['sum-bs','sum-ms','sum-ks','sum-zrk','sum-tg'];
+    const coeffIds = ['coeff-bs','coeff-ms','coeff-ks','coeff-zrk','coeff-tg'];
+    for (let i = 0; i < 5; i++) {
+        document.getElementById(venueIds[i]).textContent = venueCounts[i];
+        document.getElementById(coeffIds[i]).textContent = venueCoeffs[i].toFixed(2);
+    }
+    
+    const engSumIds = ['sum-eng1','sum-eng2','sum-eng3','sum-eng4'];
+    const engCoeffIds = ['coeff-eng1','coeff-eng2','coeff-eng3','coeff-eng4'];
+    for (let i = 0; i < 4; i++) {
+        document.getElementById(engSumIds[i]).textContent = engCounts[i];
+        document.getElementById(engCoeffIds[i]).textContent = engCoeffs[i].toFixed(2);
+    }
+}
+
+// ============ ЭКСПОРТ CSV ============
+function exportCSV() {
+    const table = document.getElementById('scheduleTable');
+    let csv = [];
+    
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('th, td');
+        const rowData = [];
+        cols.forEach(col => {
+            let text = (col.textContent || '').replace(/"/g, '""').replace(/\n/g, ' ');
+            rowData.push('"' + text + '"');
+        });
+        csv.push(rowData.join(';'));
+    });
+    
+    const csvString = csv.join('\n');
+    const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'raspisanie_oktyabr_2026.csv';
+    link.click();
+    
+    updateStatus('💾 CSV экспортирован');
+}
+
+// ============ ОЧИСТКА ============
+function clearAssignments() {
+    if (!confirm('Очистить все назначения?')) return;
+    
+    const cells = document.querySelectorAll('td[contenteditable="true"]');
+    cells.forEach(cell => {
+        cell.textContent = '';
+        cell.classList.remove('valid-event', 'zero-coeff', 'not-found');
+        cell.style.color = '';
+        cell.style.backgroundColor = '';
+    });
+    
+    recalculateTotals();
+    updateStatus('🗑️ Назначения очищены');
+}
+
+// ============ GOOGLE SHEETS ============
+function exportToGoogle() {
+    updateStatus('📤 Функция выгрузки в Google Sheets будет реализована позже');
+    alert('Для выгрузки в Google Sheets:\n1. Экспортируйте CSV\n2. Импортируйте в Google Sheets вручную');
+}
+
+// ============ СТАТУС ============
+function updateStatus(message) {
+    const bar = document.getElementById('statusBar');
+    const time = new Date().toLocaleTimeString('ru-RU');
+    bar.textContent = `[${time}] ${message}`;
+}
+</script>
+</body>
+</html>
