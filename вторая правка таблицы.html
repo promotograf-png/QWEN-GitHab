@@ -154,7 +154,11 @@ function parseRepertuar(data){
         if (!row || !row[0]) continue;
         repertuar.push({
             normName: normalize(String(row[0])),
-            cInj: parseFloat(row[1]) || 0
+            cInj: parseFloat(row[1]) || 0,
+            qty: parseInt(row[3]) || 1,           // D — КОЛИЧ инженеров на спектакле
+            knows: [ String(row[4] ?? '').trim(),   // E — зн1
+                    String(row[5] ?? '').trim(),   // F — зн2
+                    String(row[6] ?? '').trim() ]  // G — зн3
         });
     }
 }
@@ -234,7 +238,8 @@ function onCellBlur(cell){
         updateCounters();
     } else if (cell.dataset.type === 'eng'){
         validateEng(cell);
-        updateCounters();
+        // Пересчёт по всему месяцу: событие в одной колонке влияет на зачёт соседних колонок этого же дня
+        revalidateAll();
     }
 }
 function cleanCellContent(cell){
@@ -327,6 +332,15 @@ function validateEng(cell){
     if (foundPos) cell.classList.add('valid-name');
     else if (foundZero) cell.classList.add('zero-coef');
 }
+// Проверка знания: инженер idx (1..3) ЗНАЕТ спектакль, если в колонке «зн{idx}» таблицы
+// «Репертуар» стоит «+» (либо любое иное значение, кроме 0/1/2 и пустых).
+// По правилу пользователя: 0, 1 или 2 = НЕ знает (может быть только подменой).
+function knowsShow(show, idx){
+    const v = show.knows ? String(show.knows[idx-1]).trim() : '';
+    if (v === '' ) return false;
+    if (v === '0' || v === '1' || v === '2') return false;
+    return true;
+}
 function updateCounters(){
     const tfoot = document.getElementById('tableFoot');
     if (!tfoot) return;
@@ -340,7 +354,38 @@ function updateCounters(){
             try {
                 const events = eventsStr ? JSON.parse(eventsStr) : [];
                 if (events.length > 0){
-                    counters[idx].events += events.length;
+                    // Учёт количества инженеров на спектакле (КОЛИЧ):
+                    // одноинженерный (КОЛИЧ=1): засчитывается 2-м инженером только если сам НЕ ведёт (зн=0/1/2);
+                    // двухинженерный (КОЛИЧ=2): засчитывается 3-му инженеру только если он НЕ знает спектакль
+                    // и при этом реально заняты оба штатных места (два других инженера ведут это событие).
+                    let counted = 0;
+                    events.forEach(ev => {
+                        const show = findInRepertuar(ev.name);
+                        if (!show) return;
+                        const selfKnows = knowsShow(show, idx);
+                        const qty = Math.max(1, parseInt(show.qty) || 1);
+                        // Валидность события для колонки idx с учётом КОЛИЧ и знания:
+                        let valid = false;
+                        if (selfKnows){
+                            // Инженер ЗНАЕТ спектакль → он может быть только ведущим.
+                            // Ведущих не должно быть больше, чем КОЛИЧ: ранг = 1 + число знающих в колонках левее.
+                            let rank = 1;
+                            for (let o = 1; o < idx; o++){
+                                const oc = row.querySelector('td[data-type="eng"][data-eng="' + o + '"]');
+                                if (!oc) continue;
+                                try {
+                                    const oe = oc.dataset.events ? JSON.parse(oc.dataset.events) : [];
+                                    if (oe.some(e => e.name === ev.name) && knowsShow(show, o)) rank++;
+                                } catch(err){}
+                            }
+                            valid = rank <= qty;
+                        } else {
+                            // Инженер НЕ знает (0/1/2) → это подмена, засчитывается всегда
+                            valid = true;
+                        }
+                        if (valid) counted++;
+                    });
+                    counters[idx].events += counted;
                     counters[idx].days += 1;
                 } else if (rawStr.trim()){
                     // ТЗ п.4: наличие любого количества событий (валидных или нет) = 1 рабочий день
