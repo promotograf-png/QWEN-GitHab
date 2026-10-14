@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Расписание — базовый модуль</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+    :root {
+        --bg-valid: #fff9c4;
+        --col-inj1: #e8f5e9;
+        --col-inj2: #ffe8e1;
+        --col-inj3: #fffde7;
+        --border-color: #d0d0d0;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI',Tahoma,sans-serif; background:#f4f6f8; padding:20px; color:#222; font-weight:bold; }
+    .container { max-width:1600px; margin:0 auto; background:#fff; padding:25px; border-radius:8px; box-shadow:0 4px 15px rgba(0,0,0,.05); }
+    h1 { text-align:center; margin-bottom:20px; font-size:22px; }
+    .controls { display:flex; gap:12px; margin-bottom:15px; align-items:center; flex-wrap:wrap; }
+    input[type="file"] { display:none; }
+    .file-label { padding:10px 18px; background:#9C27B0; color:#fff; border-radius:4px; cursor:pointer; font-size:14px; }
+    .ctrl-label { font-size:14px; margin-left:10px; }
+    #monthSelect, #yearInput { padding:8px 10px; border:1px solid #ccc; border-radius:4px; font-size:14px; font-weight:bold; background:#fff; }
+    #yearInput { width:90px; }
+    .status-msg { padding:10px; margin:10px 0; border-radius:4px; display:none; font-size:14px; }
+    .status-ok { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
+    .status-err { background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; }
+    .table-wrapper { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; min-width:1000px; }
+    th, td { border:1px solid var(--border-color); padding:6px 8px; text-align:left; }
+    th { background:#f8f9fa; position:sticky; top:0; z-index:10; white-space:nowrap; }
+    .col-day-num { width:45px; text-align:center; background:#fafafa; }
+    .col-day-name { width:45px; text-align:center; background:#fafafa; text-transform:uppercase; }
+    .col-venue { width:150px; }
+    .col-inj1 { background:var(--col-inj1); width:80px; text-align:center; }
+    .col-inj2 { background:var(--col-inj2); width:80px; text-align:center; }
+    .col-inj3 { background:var(--col-inj3); width:80px; text-align:center; }
+    .valid-name { background-color:var(--bg-valid) !important; color:#000 !important; }
+    .zero-coef { color:#ff6f00 !important; }
+    td[contenteditable="true"] { cursor:text; outline:none; min-height:22px; }
+    td[contenteditable="true"]:focus { box-shadow:inset 0 0 0 2px #2196F3; }
+    tfoot td { font-weight:bold; background:#f0f0f0; text-align:center; font-size:13px; }
+    tfoot tr:first-child td { border-top:2px solid #999; }
+    .eng-error { color:#d32f2f !important; font-weight:900 !important; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Расписание — базовый модуль <span id="versionBadge" style="font-size:12px;font-weight:normal;background:#2196F3;color:#fff;border-radius:4px;padding:2px 8px;vertical-align:middle;">v0.3</span></h1>
+    <div class="controls">
+        <label for="repFile" class="file-label">Загрузить Репертуар (Excel)</label>
+        <input type="file" id="repFile" accept=".xlsx,.xls">
+        <label class="ctrl-label" for="monthSelect">Месяц</label>
+        <select id="monthSelect"></select>
+        <label class="ctrl-label" for="yearInput">Год</label>
+        <input type="number" id="yearInput" min="2000" max="2100">
+    </div>
+    <div id="statusMsg" class="status-msg"></div>
+    <div class="table-wrapper">
+        <table id="schedTable">
+            <thead><tr id="tableHeader"></tr></thead>
+            <tbody id="tableBody"></tbody>
+            <tfoot id="tableFoot"></tfoot>
+        </table>
+    </div>
+</div>
+<script>
+let repertuar = [];
+const VENUES = ['БС','МС','КС','ЗРК','ТГ'];
+const MONTHS = ['ЯНВАРЬ','ФЕВРАЛЬ','МАРТ','АПРЕЛЬ','МАЙ','ИЮНЬ','ИЮЛЬ','АВГУСТ','СЕНТЯБРЬ','ОКТЯБРЬ','НОЯБРЬ','ДЕКАБРЬ'];
+let curMonth = 9;
+let curYear = 2026;
+const scheduleCache = {};
+document.addEventListener('DOMContentLoaded', () => {
+    initPeriodControls();
+    buildTable();
+});
+function initPeriodControls(){
+    const sel = document.getElementById('monthSelect');
+    const yin = document.getElementById('yearInput');
+    if (!sel || !yin) return;
+    sel.innerHTML = '';
+    MONTHS.forEach((m, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = m;
+        sel.appendChild(opt);
+    });
+    sel.selectedIndex = curMonth;
+    yin.value = curYear;
+    sel.addEventListener('change', () => {
+        dumpTable();
+        curMonth = sel.selectedIndex;
+        buildTable();
+    });
+    yin.addEventListener('change', () => {
+        const y = parseInt(yin.value, 10);
+        if (!y || y < 2000 || y > 2100) { yin.value = curYear; return; }
+        dumpTable();
+        curYear = y;
+        buildTable();
+    });
+}
+function dumpTable(){
+    const data = {};
+    document.querySelectorAll('#tableBody tr').forEach(row => {
+        const d = row.dataset.day;
+        row.querySelectorAll('td[contenteditable]').forEach(c => {
+            const t = c.textContent.trim();
+            if (t) data[d + '|' + cellKey(c)] = t;
+        });
+    });
+    scheduleCache[curYear + '-' + curMonth] = data;
+}
+function restoreTable(){
+    const data = scheduleCache[curYear + '-' + curMonth];
+    if (!data) return;
+    document.querySelectorAll('#tableBody tr').forEach(row => {
+        const d = row.dataset.day;
+        row.querySelectorAll('td[contenteditable]').forEach(c => {
+            const t = data[d + '|' + cellKey(c)];
+            if (t) c.textContent = t;
+        });
+    });
+    revalidateAll();
+}
+function cellKey(c){
+    return c.dataset.venue || ('eng' + c.dataset.eng);
+}
+document.getElementById('repFile').addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt){
+        try {
+            const data = new Uint8Array(evt.target.result);
+            const wb = XLSX.read(data, {type:'array'});
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(ws, {header:1});
+            parseRepertuar(json);
+            revalidateAll();
+            showStatus('✅ Загружено записей: ' + repertuar.length, 'ok');
+        } catch(err){
+            showStatus('❌ Ошибка: ' + err.message, 'err');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+});
+function parseRepertuar(data){
+    repertuar = [];
+    for (let i = 2; i < data.length; i++){
+        const row = data[i];
+        if (!row || !row[0]) continue;
+        repertuar.push({
+            normName: normalize(String(row[0])),
+            cInj: parseFloat(row[1]) || 0,
+            qty: parseInt(row[3]) || 1,           // D — КОЛИЧ инженеров на спектакле
+            knows: [ String(row[4] ?? '').trim(),   // E — зн1
+                    String(row[5] ?? '').trim(),   // F — зн2
+                    String(row[6] ?? '').trim() ]  // G — зн3
+        });
+    }
+}
+function buildTable(){
+    const thead = document.getElementById('tableHeader');
+    const tbody = document.getElementById('tableBody');
+    let hHtml = '<th class="col-day-num">#</th><th class="col-day-name">ДЕНЬ</th>';
+    VENUES.forEach(v => hHtml += '<th class="col-venue">' + v + '</th>');
+    ['ИНЖ1','ИНЖ2','ИНЖ3'].forEach((e,i) => hHtml += '<th class="col-inj' + (i+1) + '">' + e + '</th>');
+    thead.innerHTML = hHtml;
+    const daysMap = ['ВС','ПН','ВТ','СР','ЧТ','ПТ','СБ'];
+    const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
+    let bHtml = '';
+    for (let d = 1; d <= daysInMonth; d++){
+        const date = new Date(curYear, curMonth, d);
+        bHtml += '<tr data-day="' + d + '">';
+        bHtml += '<td class="col-day-num">' + d + '</td>';
+        bHtml += '<td class="col-day-name">' + daysMap[date.getDay()] + '</td>';
+        VENUES.forEach(v => {
+            bHtml += '<td class="col-venue" contenteditable="true" data-type="venue" data-venue="' + v + '"></td>';
+        });
+        [1,2,3].forEach(idx => {
+            bHtml += '<td class="col-inj' + idx + '" contenteditable="true" data-type="eng" data-eng="' + idx + '"></td>';
+        });
+        bHtml += '</tr>';
+    }
+    tbody.innerHTML = bHtml;
+    tbody.querySelectorAll('td[contenteditable]').forEach(cell => {
+        cell.addEventListener('keydown', function(e){ handleKey(e, this); });
+        cell.addEventListener('blur',    function(){ onCellBlur(this); });
+        cell.addEventListener('focus',   function(){ placeCursorAtEnd(this); });
+    });
+    restoreTable();
+}
+function handleKey(e, cell){
+    if (e.key === 'Backspace') return;
+    if (e.key === 'Tab') return;
+    if (e.key === 'Delete'){
+        e.preventDefault();
+        cell.textContent = '';
+        onCellBlur(cell);
+        return;
+    }
+    const rows = Array.from(document.querySelectorAll('#tableBody tr'));
+    const curRowIdx = rows.indexOf(cell.parentElement);
+    const cells = Array.from(cell.parentElement.querySelectorAll('td[contenteditable]'));
+    const curCellIdx = cells.indexOf(cell);
+    let target = null;
+    if (e.key === 'ArrowLeft' && curCellIdx > 0){
+        target = cells[curCellIdx - 1];
+    } else if (e.key === 'ArrowRight' && curCellIdx < cells.length - 1){
+        target = cells[curCellIdx + 1];
+    } else if (e.key === 'ArrowUp' && curRowIdx > 0){
+        target = rows[curRowIdx - 1].querySelectorAll('td[contenteditable]')[curCellIdx] || null;
+    } else if ((e.key === 'ArrowDown' || e.key === 'Enter') && curRowIdx < rows.length - 1){
+        target = rows[curRowIdx + 1].querySelectorAll('td[contenteditable]')[curCellIdx] || null;
+    }
+    if (target){
+        e.preventDefault();
+        e.stopPropagation();
+        target.focus();
+        placeCursorAtEnd(target);
+    }
+}
+function placeCursorAtEnd(el){
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+}
+function onCellBlur(cell){
+    cleanCellContent(cell);
+    if (cell.dataset.type === 'venue'){
+        validateVenue(cell);
+        updateCounters();
+    } else if (cell.dataset.type === 'eng'){
+        validateEng(cell);
+        // Пересчёт по всему месяцу: событие в одной колонке влияет на зачёт соседних колонок этого же дня
+        revalidateAll();
+    }
+}
+function cleanCellContent(cell){
+    if (!cell) return;
+    const text = (cell.innerText || cell.textContent).replace(/\s+/g,' ').trim();
+    if (cell.textContent !== text) cell.textContent = text;
+}
+function isTimeOnly(fragment){
+    return /^\d{1,2}([.:]\d{2})?$/.test(fragment.trim());
+}
+function extractNameAndTime(raw){
+    let s = normalize(raw);
+    if (!s) return null;
+    let time = '';
+    const timeMatch = s.match(/\s*(\d{1,2}[.:]\d{2})\s*$/);
+    if (timeMatch){
+        time = timeMatch[1];
+        s = s.replace(timeMatch[0], '');
+    } else {
+        const hourMatch = s.match(/\s+(\d{1,2})\s*$/);
+        if (hourMatch){
+            time = hourMatch[1];
+            s = s.replace(hourMatch[0], '');
+        }
+    }
+    s = s.replace(/\s+/g,' ').trim();
+    return { name: s, time: time };
+}
+function parseCellEvents(txt){
+    if (!txt) return [];
+    const parts = txt.split('+').map(p => p.trim()).filter(p => p);
+    const events = [];
+    let lastName = '';
+    for (const part of parts){
+        if (isTimeOnly(part)){
+            if (lastName){
+                const show = findInRepertuar(lastName);
+                if (show){
+                    events.push({ name: lastName, time: part.trim(), cInj: show.cInj });
+                }
+            }
+            continue;
+        }
+        const extracted = extractNameAndTime(part);
+        if (!extracted || !extracted.name) continue;
+        const show = findInRepertuar(extracted.name);
+        if (!show){
+            continue;
+        }
+        lastName = extracted.name;
+        events.push({ name: extracted.name, time: extracted.time, cInj: show.cInj });
+    }
+    return events;
+}
+function validateVenue(cell){
+    const txt = cell.textContent.trim();
+    cell.classList.remove('valid-name','zero-coef');
+    if (!txt){
+        cell.dataset.events = '';
+        return;
+    }
+    const events = parseCellEvents(txt);
+    cell.dataset.events = events.length ? JSON.stringify(events) : '';
+    if (events.length === 0) return;
+    let foundPos = false, foundZero = false;
+    events.forEach(ev => {
+        if (ev.cInj > 0) foundPos = true;
+        else foundZero = true;
+    });
+    if (foundPos) cell.classList.add('valid-name');
+    else if (foundZero) cell.classList.add('zero-coef');
+}
+function validateEng(cell){
+    const txt = cell.textContent.trim();
+    cell.classList.remove('valid-name','zero-coef');
+    if (!txt){
+        cell.dataset.events = '';
+        cell.dataset.raw = '';
+        return;
+    }
+    cell.dataset.raw = txt;
+    const events = parseCellEvents(txt);
+    cell.dataset.events = events.length ? JSON.stringify(events) : '';
+    if (events.length === 0) return;
+    let foundPos = false, foundZero = false;
+    events.forEach(ev => {
+        if (ev.cInj > 0) foundPos = true;
+        else foundZero = true;
+    });
+    if (foundPos) cell.classList.add('valid-name');
+    else if (foundZero) cell.classList.add('zero-coef');
+}
+// Проверка знания: инженер idx (1..3) ЗНАЕТ спектакль, если в колонке «зн{idx}» таблицы
+// «Репертуар» стоит «+» (либо любое иное значение, кроме 0/1/2 и пустых).
+// По правилу пользователя: 0, 1 или 2 = НЕ знает (может быть только подменой).
+function knowsShow(show, idx){
+    const v = show.knows ? String(show.knows[idx-1]).trim() : '';
+    if (v === '' ) return false;
+    if (v === '0' || v === '1' || v === '2') return false;
+    return true;
+}
+function updateCounters(){
+    const tfoot = document.getElementById('tableFoot');
+    if (!tfoot) return;
+    const counters = { 1: { events: 0, days: 0 }, 2: { events: 0, days: 0 }, 3: { events: 0, days: 0 } };
+    document.querySelectorAll('#tableBody tr').forEach(row => {
+        [1,2,3].forEach(idx => {
+            const cell = row.querySelector('td[data-type="eng"][data-eng="' + idx + '"]');
+            if (!cell) return;
+            const eventsStr = cell.dataset.events;
+            const rawStr = cell.dataset.raw || '';
+            try {
+                const events = eventsStr ? JSON.parse(eventsStr) : [];
+                if (events.length > 0){
+                    // Учёт количества инженеров на спектакле (КОЛИЧ):
+                    // одноинженерный (КОЛИЧ=1): засчитывается 2-м инженером только если сам НЕ ведёт (зн=0/1/2);
+                    // двухинженерный (КОЛИЧ=2): засчитывается 3-му инженеру только если он НЕ знает спектакль
+                    // и при этом реально заняты оба штатных места (два других инженера ведут это событие).
+                    let counted = 0;
+                    events.forEach(ev => {
+                        const show = findInRepertuar(ev.name);
+                        if (!show) return;
+                        const selfKnows = knowsShow(show, idx);
+                        const qty = Math.max(1, parseInt(show.qty) || 1);
+                        // Валидность события для колонки idx с учётом КОЛИЧ и знания:
+                        let valid = false;
+                        if (selfKnows){
+                            // Инженер ЗНАЕТ спектакль → он может быть только ведущим.
+                            // Ведущих не должно быть больше, чем КОЛИЧ: ранг = 1 + число знающих в колонках левее.
+                            let rank = 1;
+                            for (let o = 1; o < idx; o++){
+                                const oc = row.querySelector('td[data-type="eng"][data-eng="' + o + '"]');
+                                if (!oc) continue;
+                                try {
+                                    const oe = oc.dataset.events ? JSON.parse(oc.dataset.events) : [];
+                                    if (oe.some(e => e.name === ev.name) && knowsShow(show, o)) rank++;
+                                } catch(err){}
+                            }
+                            valid = rank <= qty;
+                        } else {
+                            // Инженер НЕ знает (0/1/2) → это подмена, засчитывается всегда
+                            valid = true;
+                        }
+                        if (valid) counted++;
+                    });
+                    counters[idx].events += counted;
+                    counters[idx].days += 1;
+                } else if (rawStr.trim()){
+                    // ТЗ п.4: наличие любого количества событий (валидных или нет) = 1 рабочий день
+                    counters[idx].days += 1;
+                }
+            } catch(e){}
+        });
+    });
+    const totalCols = 2 + VENUES.length;
+    let html = '<tr>';
+    html += '<td colspan="' + totalCols + '">Событий:</td>';
+    html += '<td class="col-inj1">' + counters[1].events + '</td>';
+    html += '<td class="col-inj2">' + counters[2].events + '</td>';
+    html += '<td class="col-inj3">' + counters[3].events + '</td>';
+    html += '</tr>';
+    html += '<tr>';
+    html += '<td colspan="' + totalCols + '">Дней:</td>';
+    html += '<td class="col-inj1">' + counters[1].days + '</td>';
+    html += '<td class="col-inj2">' + counters[2].days + '</td>';
+    html += '<td class="col-inj3">' + counters[3].days + '</td>';
+    html += '</tr>';
+    tfoot.innerHTML = html;
+}
+function revalidateAll(){
+    document.querySelectorAll('td[data-type="venue"]').forEach(c => {
+        if (c.textContent.trim()) validateVenue(c);
+    });
+    document.querySelectorAll('td[data-type="eng"]').forEach(c => {
+        if (c.textContent.trim()) validateEng(c);
+    });
+    updateCounters();
+}
+function normalize(str){
+    return str ? String(str).toUpperCase().trim().replace(/\s+/g,' ').replace(/["']/g,'') : '';
+}
+function findInRepertuar(cleanName){
+    if (!cleanName) return null;
+    return repertuar.find(r => r.normName === cleanName);
+}
+function showStatus(msg, type){
+    const el = document.getElementById('statusMsg');
+    el.textContent = msg;
+    el.className = 'status-msg status-' + type;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 4000);
+}
+</script>
+</body>
+</html>
