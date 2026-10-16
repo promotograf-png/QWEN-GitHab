@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Калькулятор надбавок видеоцеха v0.5</title>
+    <title>Калькулятор надбавок видеоцеха v0.6</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -108,7 +108,7 @@
 </head>
 <body>
 <div class="container">
-    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.5</span></h1>
+    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.6</span></h1>
     <div class="controls">
         <label for="repFile" class="file-label">Загрузить Репертуар (Excel)</label>
         <input type="file" id="repFile" accept=".xlsx,.xls">
@@ -514,6 +514,91 @@
         if (hasUncovered) result.status = 'uncovered';
         else if (hasPartial) result.status = 'partial';
         else result.status = 'covered';
+
+        return result;
+    }
+
+    // ============================================================
+    // ЗАДАЧА 5 (ТЗ п. 4.1): validateEngineerAssignment — валидация
+    // матрицы назначений инженеров на спектакль/событие.
+    // Чистая функция: НЕ обращается к DOM.
+    // Вход:  spectacle — объект из repertoire {name, coeff, engCount, knows}
+    //        (поддерживаются и поля исходника: count вместо engCount,
+    //         zn вместо knows);
+    //        assigned  — массив по 3 инженерам: true/false либо номер
+    //                    инженера (1|2|3), если он назначен на событие.
+    // Выход: { scores: [0,0,0], messages: [{engineer, text, type}], error }
+    // Матрица ТЗ 4.1:
+    //   0 знающих                        -> error 'Никто не знает'
+    //   1-инж спектакль: >2 назначенных  -> error 'Многовато'
+    //   1-инж спектакль: 2 назначенных   -> знающий 1.0 / ученик 0.5 + «ОПЫТ N»
+    //     (два знающих -> 'Многовато')
+    //   2-инж спектакль: 2 назначенных   -> 1.0 / 1.0 (ученику «ОПЫТ N»)
+    //   2-инж спектакль: 3 (1 зн. + 2 уч)-> 1.0 / 0.5 / 0.5 + «ОПЫТ N» каждому
+    //   2-инж спектакль: >3              -> error 'Многовато'
+    // ============================================================
+    function validateEngineerAssignment(spectacle, assigned) {
+        const result = { scores: [0, 0, 0], messages: [], error: null };
+        if (!spectacle || !Array.isArray(assigned)) return result;
+
+        // Приведение входа к единому виду (совместимость с полями parseRepertuar)
+        const knows = Array.isArray(spectacle.knows) ? spectacle.knows : (spectacle.zn || []);
+        const engCount = parseInt(spectacle.engCount !== undefined ? spectacle.engCount : spectacle.count, 10) || 1;
+
+        // Кандидаты: индекс инженера 0..2 (ИНЖ1..ИНЖ3)
+        const candidates = [];
+        for (let i = 0; i < 3; i++) {
+            if (assigned[i] === true || assigned[i] === 1 || String(assigned[i]) === 'true') candidates.push(i);
+        }
+
+        // Категории назначенных по знаниям репертуара
+        const experts = [];   // знающие ('+')
+        const learners = [];  // ученики: уровень опыта N из значения ячейки ЗN
+        const novices = [];   // назначены, но без опыта ('0'/пусто) — балл 0 (ТЗ 6.1)
+        candidates.forEach(i => {
+            const k = normalize(knows[i] || '');
+            if (k === '+') experts.push(i);
+            else if (/^\d+$/.test(k)) learners.push({ idx: i, level: parseInt(k, 10) });
+            else novices.push(i);
+        });
+
+        const totalAssigned = candidates.length;
+
+        // --- Ошибочные строки матрицы (ТЗ 4.1) ---
+        if (experts.length === 0) {
+            result.error = 'Никто не знает';
+            return result;
+        }
+        if (engCount === 1 && totalAssigned > 2) {
+            result.error = 'Многовато';
+            return result;
+        }
+        if (engCount >= 2 && totalAssigned > 3) {
+            result.error = 'Многовато';
+            return result;
+        }
+        if (engCount === 1 && totalAssigned === 2 && experts.length === 2) {
+            result.error = 'Многовато';
+            return result;
+        }
+
+        // --- Баллы (коэффициент 1.0 = полная ставка, 0.5 = ученик) ---
+        let expertScore = 1.0, learnerScore = 1.0;
+        if (engCount === 1) {
+            learnerScore = 0.5;                       // 1-инж: 1.0 / 0.5 (ТЗ 4.1)
+        } else if (engCount === 2) {
+            if (totalAssigned === 3 && experts.length === 1) {
+                learnerScore = 0.5;                   // 2-инж, 3 чел.: 1.0 / 0.5 / 0.5
+            }
+            // 2 чел.: 1.0 / 1.0 — learnerScore остаётся 1.0
+        }
+
+        experts.forEach(i => { result.scores[i] = expertScore; });
+        learners.forEach(l => {
+            result.scores[l.idx] = learnerScore;
+            result.messages.push({ engineer: l.idx + 1, text: 'ОПЫТ ' + l.level, type: 'info' });
+        });
+        // novices остаются с баллом 0; плашку «ОПЫТ» не показываем
 
         return result;
     }
