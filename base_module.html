@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Калькулятор надбавок видеоцеха v0.4</title>
+    <title>Калькулятор надбавок видеоцеха v0.5</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -108,7 +108,7 @@
 </head>
 <body>
 <div class="container">
-    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.4</span></h1>
+    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.5</span></h1>
     <div class="controls">
         <label for="repFile" class="file-label">Загрузить Репертуар (Excel)</label>
         <input type="file" id="repFile" accept=".xlsx,.xls">
@@ -431,6 +431,91 @@
         }
 
         return events;
+    }
+
+    // ============================================================
+    // ЗАДАЧА 4 (ТЗ п. 5.2): checkVenueCoverage — проверка покрытия
+    // событий ячейки площадки инженерами ИНЖ1-ИНЖ3 этой же строки.
+    // Чистая функция: НЕ обращается к DOM.
+    // Вход:  venueText — строка ячейки площадки;
+    //        venueName — 'БС'|'МС'|'КС'|'ЗРК'|'ТГ';
+    //        row       — массив ячеек строки (индексы 7,8,9 = ИНЖ1-ИНЖ3).
+    // Выход: { status: 'covered'|'partial'|'uncovered', uncoveredEvents: [] }
+    // Логика "И": covered только если ВСЕ известные события укомплектованы.
+    // ============================================================
+    function checkVenueCoverage(venueText, venueName, row) {
+        const result = { status: 'covered', uncoveredEvents: [] };
+        row = Array.isArray(row) ? row : [];
+
+        // Пустая ячейка площадки покрывать нечего (ТЗ 5.3: белый фон)
+        if (!venueText || !String(venueText).trim()) return result;
+
+        // 1. Парсим колонку площадки (ТЗ 5.1)
+        const venueEvents = parseVenueEvents(venueText);
+
+        // 2. Готовим назначения из ИНЖ1-ИНЖ3 одним проходом (parseCellEvents + validateEvents)
+        const rowData = {};
+        VENUES.forEach((v, i) => { rowData[v] = row[i + 2] !== undefined ? String(row[i + 2]) : ''; });
+        const engEvents = [[], [], []];
+        [7, 8, 9].forEach((colIdx, i) => {
+            const cellText = row[colIdx] !== undefined ? String(row[colIdx]) : '';
+            engEvents[i] = validateEvents(parseCellEvents(cellText), rowData);
+        });
+
+        // Слот события-назначения: из timeOfDay, иначе дефолт времени площадки (ТЗ 3.2)
+        const DEFAULT_VENUE_TIME = { 'БС': 19 * 60 + 0, 'МС': 19 * 60 + 30 };
+        const assignmentSlot = (ev) => {
+            if (ev.timeOfDay) return ev.timeOfDay;
+            const mins = DEFAULT_VENUE_TIME[venueName];
+            if (mins === undefined) return null; // КС, ЗРК, ТГ — время всегда явно (ТЗ 3.2)
+            return mins <= 15 * 60 + 30 ? 'morning' : 'evening';
+        };
+
+        // 3. Для каждого известного события считаем needed / assigned
+        let hasPartial = false, hasUncovered = false;
+
+        for (const vev of venueEvents) {
+            if (!vev.isKnown) continue; // unknown игнорируется в расчётах (ТЗ 5.1)
+
+            const rec = findInRepertuar(vev.name);
+            const needed = rec ? (rec.count || 1) : 1;
+
+            // Назначение подходит, если это ссылка на данную площадку
+            // (в/БС, у/БС, просто БС) с совместимым слотом ИЛИ прямой вызов
+            // самого события по имени ("ГАМЛЕТ", "СЪЕМКА" и т.п., ТЗ 3.1/5.1)
+            let assigned = 0;
+            for (const list of engEvents) {
+                for (const a of list) {
+                    if (!a.isValid) continue; // учитываем только валидные назначения (ТЗ 6.3)
+                    let matches = false;
+                    if (a.type === 'venue' && a.venue === venueName) {
+                        const aSlot = assignmentSlot(a);
+                        // vev.slot===null (без времени) — любой слот; иначе совпадение или без слота у назначения
+                        matches = (vev.slot === null) || (aSlot === null) || (aSlot === vev.slot);
+                    } else if (a.type === 'service' || a.type === 'unknown') {
+                        // Прямое имя события в ячейке ИНЖ ("ГАМЛЕТ", "СЪЕМКА"...) — ТЗ 3.1/5.1
+                        const aName = normalize(a.service !== null ? a.service : a.raw);
+                        matches = (aName === vev.name);
+                    }
+                    if (matches) assigned++;
+                }
+            }
+
+            if (assigned >= needed) continue;              // событие покрыто
+            if (assigned > 0) hasPartial = true;           // 0 < assigned < needed
+            else hasUncovered = true;                      // assigned == 0
+            result.uncoveredEvents.push({
+                name: vev.name, raw: vev.raw, time: vev.time, slot: vev.slot,
+                needed: needed, assigned: assigned
+            });
+        }
+
+        // 4. Итог по логике "И" (ТЗ 5.2)
+        if (hasUncovered) result.status = 'uncovered';
+        else if (hasPartial) result.status = 'partial';
+        else result.status = 'covered';
+
+        return result;
     }
 
     // --- Валидация ---
