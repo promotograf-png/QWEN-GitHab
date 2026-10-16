@@ -81,6 +81,89 @@ let curMonth = 9;              // индекс месяца 0–11, по умо�
 let curYear = 2026;
 const scheduleCache = {};      // введённые данные по каждому периоду
 
+/* ---------- БЛОК 5. ПАРСИНГ ЯЧЕЕК (ТЗ 3.3) ---------- */
+// Граница слотов: <= 15:30 = утро, > 15:30 = вечер (ТЗ 3.2)
+const SLOT_BOUNDARY_MIN = 15 * 60 + 30;
+const VENUE_DEFAULT_TIME = { 'БС': 19*60+0, 'МС': 19*60+30 }; // КС, ЗРК, ТГ — только явно (ТЗ 3.2)
+
+// "19.30" / "19:30" -> 1170; иначе null
+function parseTimeToMinutes(str){
+    const m = /^(\d{1,2})[.:](\d{2})$/.exec(str);
+    if (!m) return null;
+    const h = parseInt(m[1],10), mm = parseInt(m[2],10);
+    if (h > 23 || mm > 59) return null;
+    return h*60 + mm;
+}
+
+// Слот по времени: morning / evening / null
+function getSlotByMinutes(mins){
+    if (mins === null) return null;
+    return mins <= SLOT_BOUNDARY_MIN ? 'morning' : 'evening';
+}
+
+// Слот события строки площадки: явное время или дефолт площадки (ТЗ 3.4)
+function eventSlotOf(ev, venue){
+    let slot = getSlotByMinutes(ev.time !== null ? ev.time : null);
+    if (!slot && venue && Object.prototype.hasOwnProperty.call(VENUE_DEFAULT_TIME, venue)){
+        slot = getSlotByMinutes(VENUE_DEFAULT_TIME[venue]);
+    }
+    return slot;
+}
+
+// Классификация одного токена (слова) фрагмента. Токен приходит уже в lowercase.
+function classifyToken(tok){
+    let m = /^(у|в)\/(.+)$/.exec(tok);              // префикс со слитным словом: "у/бс"
+    if (m) return [ { kind:'prefix', tod:(m[1]==='у'?'morning':'evening') },
+                    ...classifyToken(m[2]) ];
+    if (/^(у|в)\/$/.test(tok)) return [{ kind:'prefix', tod:(tok[0]==='у'?'morning':'evening') }]; // отдельный префикс: "в/"
+    if (/^\d{1,2}[.:]\d{2}$/.test(tok)) return [{ kind:'time', time:parseTimeToMinutes(tok) }];
+    if (/^\d{1,2}$/.test(tok)) return [{ kind:'hours', hours:parseInt(tok,10)*60 }];
+    const n = normalize(tok);
+    if (!n) return [];
+    if (VENUES.includes(n)) return [{ kind:'venue', name:n }];
+    if (findInRepertuar(extractCleanName(n))) return [{ kind:'rep', name:n }]; // матчинг через extractCleanName, как в БЛОКЕ 4
+    return [{ kind:'word', name:n }];
+}
+
+/* parseCellEvents(text) — синтаксический разбор ячейки (ТЗ 3.3).
+   Разделяет по "+", возвращает ВСЕ фрагменты, включая unknown. */
+function parseCellEvents(text){
+    const events = [];
+    if (!text || !String(text).trim()) return events;
+    String(text).split('+').forEach(function(raw){
+        const frag = raw.trim().toLowerCase().replace(/\s*\/\s*/g,'/'); // нормализация префикса (ТЗ 3.3)
+        if (!frag) return;
+        const tokens = frag.split(/\s+/).flatMap(classifyToken).filter(Boolean);
+        const ev = { type:'unknown', raw:raw.trim(), name:'', time:null, timeOfDay:null,
+                     prefixFromText:false, matched:false, service:false };
+        let firstWordTaken = false;
+        tokens.forEach(function(t){
+            if (t.kind === 'prefix'){
+                if (!ev.timeOfDay){ ev.timeOfDay = t.tod; ev.prefixFromText = true; }
+            } else if (t.kind === 'time'){
+                if (ev.time === null) ev.time = t.time;
+            } else if (t.kind === 'hours'){
+                if (ev.time === null) ev.time = t.hours;
+            } else if (t.kind === 'venue'){
+                if (ev.type === 'unknown'){ ev.type = 'venue'; ev.name = t.name; firstWordTaken = true; }
+            } else if (t.kind === 'rep'){
+                if (!firstWordTaken && !ev.matched){ ev.matched = true; ev.name += (ev.name?' ':'') + t.name; }
+            } else if (t.kind === 'word'){
+                if (!firstWordTaken){ ev.name += (ev.name?' ':'') + t.name; firstWordTaken = true; }
+            }
+        });
+        if (ev.matched){ ev.service = true; if (ev.type === 'unknown') ev.type = 'service'; } // служебный индекс из Репертуара (ТЗ 3.4)
+        if (ev.type === 'venue' && !ev.timeOfDay){ // дефолтное время площадки (ТЗ 3.2)
+            if (Object.prototype.hasOwnProperty.call(VENUE_DEFAULT_TIME, ev.name)){
+                ev.time = VENUE_DEFAULT_TIME[ev.name];
+                ev.timeOfDay = getSlotByMinutes(ev.time);
+            }
+        }
+        events.push(ev);
+    });
+    return events;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initPeriodControls();      // сначала контролы периода
     buildTable();              // потом таблица
