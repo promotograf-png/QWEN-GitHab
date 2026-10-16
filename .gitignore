@@ -1,1 +1,4 @@
-Код токена от ГитХаб.txt 
+venv/
+__pycache__/
+*.pyc
+.env
