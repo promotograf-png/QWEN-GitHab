@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Калькулятор надбавок видеоцеха v0.3</title>
+    <title>Калькулятор надбавок видеоцеха v0.4</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -108,7 +108,7 @@
 </head>
 <body>
 <div class="container">
-    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.3</span></h1>
+    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.4</span></h1>
     <div class="controls">
         <label for="repFile" class="file-label">Загрузить Репертуар (Excel)</label>
         <input type="file" id="repFile" accept=".xlsx,.xls">
@@ -336,6 +336,101 @@
             results.push(ev);
         }
         return results;
+    }
+
+    // ============================================================
+    // ЗАДАЧА 3 (ТЗ п. 3.4): validateEvents — контекстная проверка
+    // событий инженера. Чистая функция: НЕ обращается к DOM.
+    // Вход:  events  — массив от parseCellEvents
+    //        rowData — {БС:'...', МС:'...', КС:'...', ЗРК:'...', ТГ:'...'}
+    //                  содержимое колонок площадок текущей строки
+    // Выход: тот же массив events с обновлёнными isValid / error.
+    // Правила:
+    //  service: isValid=true, если есть в repertuar; иначе 'Нет в репертуаре'.
+    //  venue без timeOfDay: isValid=true, если колонка площадки не пуста.
+    //  venue у/: в колонке есть событие со временем <= 15.30.
+    //  venue в/: в колонке есть событие со временем > 15.30 ИЛИ без времени
+    //           (дефолт вечера: БС=19.00, МС=19.30).
+    //  unknown: isValid=false, error='Неизвестный индекс'.
+    // ============================================================
+    function validateEvents(events, rowData) {
+        if (!Array.isArray(events)) return events;
+        const row = rowData || {};
+
+        for (const ev of events) {
+            ev.isValid = false;
+            ev.error = null;
+
+            if (ev.type === 'service') {
+                // Служебный индекс: сверка с репертуаром (ТЗ 3.4)
+                if (findInRepertuar(ev.service)) {
+                    ev.isValid = true;
+                } else {
+                    ev.error = 'Нет в репертуаре';
+                }
+                continue;
+            }
+
+            if (ev.type === 'venue') {
+                const cellText = String(row[ev.venue] !== undefined ? row[ev.venue] : '').trim();
+
+                if (!ev.timeOfDay) {
+                    // Без префикса: достаточно непустой колонки площадки (ТЗ 3.4)
+                    if (cellText) {
+                        ev.isValid = true;
+                    } else {
+                        ev.error = 'На ' + ev.venue + ' нет события';
+                    }
+                    continue;
+                }
+
+                if (!cellText) {
+                    ev.error = 'На ' + ev.venue + ' нет события';
+                    continue;
+                }
+
+                // Разбор колонки площадки по "+" и по слотам (ТЗ 5.1/3.4)
+                const slotOfFragment = (frag) => {
+                    const tMatch = frag.match(/\b(\d{1,2})[.:](\d{2})\s*$/);
+                    if (tMatch) {
+                        const mins = parseInt(tMatch[1], 10) * 60 + parseInt(tMatch[2], 10);
+                        return (mins <= 15 * 60 + 30) ? 'morning' : 'evening';
+                    }
+                    // Время только часами ("19") — тоже вечерний формат (ТЗ 3.2)
+                    const hMatch = frag.match(/\b(\d{1,2})\s*$/);
+                    if (hMatch) {
+                        const mins = parseInt(hMatch[1], 10) * 60;
+                        return (mins <= 15 * 60 + 30) ? 'morning' : 'evening';
+                    }
+                    // Время не указано -> дефолт: БС=19.00, МС=19.30 (вечер),
+                    // остальные площадки без времени считаем вечерними (ТЗ 3.2)
+                    return 'evening';
+                };
+
+                const fragments = cellText.split('+').map(s => s.trim()).filter(s => s.length > 0);
+                const foundSlot = fragments.map(slotOfFragment);
+
+                if (ev.timeOfDay === 'morning') {
+                    if (foundSlot.includes('morning')) {
+                        ev.isValid = true;
+                    } else {
+                        ev.error = 'у/' + ev.venue + ', а на ' + ev.venue + ' нет утреннего';
+                    }
+                } else { // evening
+                    if (foundSlot.includes('evening')) {
+                        ev.isValid = true;
+                    } else {
+                        ev.error = 'в/' + ev.venue + ', а на ' + ev.venue + ' нет вечернего';
+                    }
+                }
+                continue;
+            }
+
+            // unknown (и пустые фрагменты) — остаётся невалидным (ТЗ 3.4)
+            ev.error = 'Неизвестный индекс';
+        }
+
+        return events;
     }
 
     // --- Валидация ---

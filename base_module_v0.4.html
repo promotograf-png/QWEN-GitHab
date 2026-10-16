@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор надбавок видеоцеха v0.4</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-valid: #fff9c4;
+            --col-inj1: #e8f5e9;
+            --col-inj2: #ffe8e1;
+            --col-inj3: #fffde7;
+            --border-color: #d0d0d0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f6f8; padding: 20px; color: #222; font-weight: bold; }
+        .container { max-width: 1600px; margin: 0 auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { text-align: center; margin-bottom: 25px; font-size: 22px; color: #333; }
+
+        .controls { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+        .btn { padding: 10px 18px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; color: white; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.85; }
+        .btn-file { background: #9C27B0; } .btn-csv { background: #2196F3; } .btn-gs { background: #FF9800; }
+        input[type="file"] { display: none; }
+        .file-label { padding: 10px 18px; background: #9C27B0; color: white; border-radius: 4px; cursor: pointer; font-size: 14px; }
+
+        .info-panel { background: #e3f2fd; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #2196F3; font-size: 13px; line-height: 1.5; }
+
+        .table-wrapper { overflow-x: auto; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1200px; }
+        th, td { border: 1px solid var(--border-color); padding: 6px 8px; text-align: left; }
+        th { background: #f8f9fa; position: sticky; top: 0; z-index: 10; white-space: nowrap; }
+
+        .col-day-num { width: 45px; text-align: center; background: #fafafa; }
+        .col-day-name { width: 45px; text-align: center; background: #fafafa; text-transform: uppercase; }
+        .col-venue { width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .col-inj1 { background-color: var(--col-inj1); width: 80px; text-align: center; }
+        .col-inj2 { background-color: var(--col-inj2); width: 80px; text-align: center; }
+        .col-inj3 { background-color: var(--col-inj3); width: 80px; text-align: center; }
+
+        .valid-name { background-color: var(--bg-valid) !important; }
+        td[contenteditable="true"] { cursor: text; outline: none; min-height: 22px; }
+        td[contenteditable="true"]:focus { box-shadow: inset 0 0 0 2px #2196F3; background: #fff !important; }
+
+        /* ИСПРАВЛЕННЫЕ СТИЛИ ДЛЯ ИТОГОВ (CSS GRID) */
+        .summary-container {
+            margin-top: 10px;
+            display: grid;
+            /* Сетка повторяет структуру основной таблицы:
+               45px (число) + 45px (день) + 5 площадок + 3 инженера */
+            grid-template-columns: 45px 45px repeat(5, 1fr) repeat(3, 45px);
+            gap: 0;
+        }
+
+        .summary-title {
+            grid-column: 1 / -1;
+            font-size: 15px;
+            margin-bottom: 8px;
+            color: #555;
+            padding-left: 90px;
+        }
+
+        .summary-table {
+            grid-column: 1 / -1;
+            border-collapse: collapse;
+            font-size: 14px;
+            table-layout: fixed;
+            width: 100%;
+        }
+
+        .summary-table th, .summary-table td {
+            padding: 8px 2px;
+            text-align: center;
+            border: 1px solid #ddd;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Скрываем первые 7 колонок (дни + площадки), но сохраняем место в сетке */
+        .summary-table th:nth-child(-n+7), .summary-table td:nth-child(-n+7) {
+            visibility: hidden; padding: 0; border: none; width: auto;
+        }
+
+        /* Целевые колонки под ИНЖ1, ИНЖ2, ИНЖ3 */
+        .summary-table th:nth-child(8), .summary-table td:nth-child(8) { background: var(--col-inj1); width: 45px; }
+        .summary-table th:nth-child(9), .summary-table td:nth-child(9) { background: var(--col-inj2); width: 45px; }
+        .summary-table th:nth-child(10), .summary-table td:nth-child(10) { background: var(--col-inj3); width: 45px; }
+
+        /* Первая видимая колонка "Показатель" занимает место под днями+площадками */
+        .summary-table th:first-child, .summary-table td:first-child {
+            visibility: visible !important;
+            text-align: left !important;
+            padding-left: 10px !important;
+        }
+
+        .summary-total-row { background: #e8f5e9 !important; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; width: 400px; }
+        .modal-content input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+        .status-msg { padding: 10px; margin: 10px 0; border-radius: 4px; display: none; font-size: 14px; }
+        .status-ok { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-err { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.4</span></h1>
+    <div class="controls">
+        <label for="repFile" class="file-label">Загрузить Репертуар (Excel)</label>
+        <input type="file" id="repFile" accept=".xlsx,.xls">
+        <button class="btn btn-csv" onclick="exportCSV()">Экспорт CSV</button>
+        <button class="btn btn-gs" onclick="openGModal()">☁️ В Google Sheets</button>
+    </div>
+    <div id="statusMsg" class="status-msg"></div>
+    <div class="info-panel">
+        <strong>ℹ️ Правила:</strong> Разделитель событий: <b>+</b>. В колонках ИНЖ пишите: "БС", "МС+СЪЕМКА ЗРК".<br>
+        Backspace работает штатно. Навигация: Стрелки, Tab, Enter. Желтый фон = событие распознано.
+    </div>
+    <div class="table-wrapper">
+        <table id="schedTable">
+            <thead><tr id="tableHeader"></tr></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+    <div class="summary-container">
+        <div class="summary-title">📊 Сводка по инженерам</div>
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th style="width:auto; min-width:120px;">Показатель</th>
+                    <th></th><th></th><th></th><th></th><th></th><th></th> <!-- Пустые под площадки -->
+                    <th style="background:var(--col-inj1)">ИНЖ 1</th>
+                    <th style="background:var(--col-inj2)">ИНЖ 2</th>
+                    <th style="background:var(--col-inj3)">ИНЖ 3</th>
+                </tr>
+            </thead>
+            <tbody id="summaryBody">
+                <tr><td style="text-align:left; padding-left:10px;">Рабочих дней</td><td></td><td></td><td></td><td></td><td></td><td></td><td id="s-days-1">0</td><td id="s-days-2">0</td><td id="s-days-3">0</td></tr>
+                <tr><td style="text-align:left; padding-left:10px;">Сумма коэф_инж</td><td></td><td></td><td></td><td></td><td></td><td></td><td id="s-cinj-1">0.00</td><td id="s-cinj-2">0.00</td><td id="s-cinj-3">0.00</td></tr>
+                <tr><td style="text-align:left; padding-left:10px;">Сумма коэф_тех</td><td></td><td></td><td></td><td></td><td></td><td></td><td id="s-ctech-1">0.00</td><td id="s-ctech-2">0.00</td><td id="s-ctech-3">0.00</td></tr>
+                <tr class="summary-total-row"><td style="text-align:left; padding-left:10px;">Надбавка (руб)</td><td></td><td></td><td></td><td></td><td></td><td></td><td id="s-rub-1">0</td><td id="s-rub-2">0</td><td id="s-rub-3">0</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="gModal" class="modal">
+    <div class="modal-content">
+        <h3>Выгрузка в Google Sheets</h3>
+        <p style="font-size:13px; color:#666;">URL веб-приложения Apps Script:</p>
+        <input type="text" id="gsUrl" placeholder="https://script.google.com/macros/s/.../exec">
+        <div class="modal-btns">
+            <button class="btn btn-gs" onclick="sendToGS()">Отправить</button>
+            <button class="btn" style="background:#ccc" onclick="closeGModal()">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let repertuar = [];
+    let weights = { inj: 950, tech: 815 };
+    const VENUES = ['БС', 'МС', 'КС', 'ЗРК', 'ТГ'];
+    // Служебные индексы для parseCellEvents (ТЗ 2.1/3.3). Полные данные — в repertuar (колонки A-C).
+    const SERVICE_INDEXES = ['СЪЕМКА', 'СЪЕМКА БС', 'ТРК МС', 'МОНТ', 'ВМОНТ', 'РЕП', 'ТРК', 'СЪЕМКА ЗРК'];
+    const MONTH = 'ОКТЯБРЬ';
+    const YEAR = '2026';
+
+    document.addEventListener('DOMContentLoaded', () => { buildTable(); loadGSUrl(); });
+
+    // --- Загрузка Репертуара ---
+    document.getElementById('repFile').addEventListener('change', function(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const wb = XLSX.read(data, {type: 'array'});
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(ws, {header: 1});
+                parseRepertuar(json);
+                revalidateAll(); recalcSummary();
+                showStatus(`✅ Загружено ${repertuar.length} записей`, 'ok');
+            } catch (err) { showStatus('❌ Ошибка: ' + err.message, 'err'); }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function parseRepertuar(data) {
+        repertuar = [];
+        if (data.length > 0 && data[0].length >= 3) {
+            weights.inj = parseFloat(data[0][1]) || 950;
+            weights.tech = parseFloat(data[0][2]) || 815;
+        }
+        for (let i = 2; i < data.length; i++) {
+            const row = data[i]; if (!row || !row[0]) continue;
+            repertuar.push({
+                normName: normalize(String(row[0])),
+                cInj: parseFloat(row[1]) || 0,
+                cTech: parseFloat(row[2]) || 0,
+                count: parseInt(row[3]) || 1,
+                zn: [normalize(row[4]||''), normalize(row[5]||''), normalize(row[6]||'')]
+            });
+        }
+    }
+
+    // --- Построение таблицы ---
+    function buildTable() {
+        const thead = document.getElementById('tableHeader');
+        const tbody = document.getElementById('tableBody');
+        let hHtml = '<th class="col-day-num">#</th><th class="col-day-name">ДЕНЬ</th>';
+        VENUES.forEach(v => hHtml += `<th class="col-venue">${v}</th>`);
+        ['ИНЖ1','ИНЖ2','ИНЖ3'].forEach((e,i) => hHtml += `<th class="col-inj${i+1}">${e}</th>`);
+        thead.innerHTML = hHtml;
+
+        const daysMap = ['ВС','ПН','ВТ','СР','ЧТ','ПТ','СБ'];
+        let bHtml = '';
+        for (let d = 1; d <= 31; d++) {
+            const date = new Date(2026, 9, d);
+            bHtml += `<tr data-day="${d}">`;
+            bHtml += `<td class="col-day-num">${d}</td><td class="col-day-name">${daysMap[date.getDay()]}</td>`;
+            VENUES.forEach(v => {
+                bHtml += `<td class="col-venue" contenteditable="true" data-type="venue" data-venue="${v}" onblur="onBlurVenue(this)" onkeydown="handleKey(event, this)"></td>`;
+            });
+            ['ИНЖ1','ИНЖ2','ИНЖ3'].forEach((eng, idx) => {
+                bHtml += `<td class="col-inj${idx+1}" contenteditable="true" data-type="eng" data-eng="${idx+1}" onblur="recalcSummary()" onkeydown="handleKey(event, this)"></td>`;
+            });
+            bHtml += '</tr>';
+        }
+        tbody.innerHTML = bHtml;
+    }
+
+
+    // ============================================================
+    // ЗАДАЧА 1 (ТЗ п. 3.3): parseCellEvents — синтаксический разбор
+    // текста ячейки инженера. Чистая функция: НЕ обращается к DOM,
+    // таблице и repertoire. Возвращает ВСЕ фрагменты, включая unknown.
+    // Вход:  text (строка)
+    // Выход: массив объектов {raw, type, venue, service, timeOfDay, isValid, error}
+    // ============================================================
+    function parseCellEvents(text) {
+        const results = [];
+        if (!text || !String(text).trim()) return results;
+
+        const parts = String(text).split('+');
+
+        for (const raw of parts) {
+            // Нормализация префикса: lowercase, убрать пробелы вокруг "/" (ТЗ 3.3)
+            const frag = raw.trim().toLowerCase().replace(/\s*\/\s*/g, '/');
+
+            const ev = {
+                raw: raw.trim(),      // исходный текст фрагмента (для отображения)
+                type: 'unknown',      // venue | service | unknown
+                venue: null,          // индекс площадки (БС, МС...) или null
+                service: null,        // служебный индекс (СЪЕМКА, МОНТ...) или null
+                timeOfDay: null,      // 'morning' | 'evening' | null
+                isValid: false,       // контекстную проверку выполнит validateEvents (Задача 2)
+                error: null           // текст ошибки (заполнится в Задаче 2)
+            };
+
+            if (!frag) { results.push(ev); continue; } // пустой фрагмент ("A++B") — неизвестным не считается, но сохраняется
+
+            // 1. Извлечение временнОго префикса у/ или в/ (только перед индексом площадки, ТЗ 3.1)
+            const prefMatch = frag.match(/^(у|в)\//);
+            if (prefMatch) {
+                ev.timeOfDay = (prefMatch[1] === 'у') ? 'morning' : 'evening';
+            }
+            let rest = frag.replace(/^(у|в)\//, '');
+
+            // 2. Отсечь время в конце фрагмента: "19.30", "19:30" или "19" (ТЗ 3.2)
+            rest = rest.replace(/\s+\d{1,2}[.:]\d{2}\s*$/, '').trim();
+            rest = rest.replace(/\s+\d{1,2}\s*$/, '').trim();
+
+            // 3. Определение типа: venue / service / unknown (сверка в верхнем регистре, ТЗ 2.1)
+            const upper = rest.toUpperCase();
+            if (VENUES.includes(upper)) {
+                ev.type = 'venue';
+                ev.venue = upper;
+            } else if (SERVICE_INDEXES.includes(upper)) {
+                ev.type = 'service';
+                ev.service = upper;
+            } else {
+                ev.type = 'unknown';
+            }
+
+            results.push(ev);
+        }
+        return results;
+    }
+
+    // ============================================================
+    // ЗАДАЧА 2 (ТЗ п. 5.1): parseVenueEvents — синтаксический разбор
+    // текста ячейки площадки. Чистая функция: НЕ обращается к DOM.
+    // Вход:  text (строка)
+    // Выход: массив объектов {raw, name, time, slot, isKnown}
+    // Правила: разделитель "+"; время — цифры через точку (19.30);
+    // нет времени -> time=null, slot=null; <=15.30 -> 'morning', иначе 'evening';
+    // isKnown = true, если name есть в репертуаре.
+    // ============================================================
+    function parseVenueEvents(text) {
+        const results = [];
+        if (!text || !String(text).trim()) return results;
+
+        const parts = String(text).split('+');
+
+        for (const raw of parts) {
+            const frag = raw.trim();
+            const ev = {
+                raw: frag,        // исходный текст фрагмента (для отображения)
+                name: '',         // нормализованное название события
+                time: null,       // "ЧЧ.ММ" или null
+                slot: null,       // 'morning' | 'evening' | null
+                isKnown: false    // есть ли name в repertuar
+            };
+
+            if (frag) {
+                // 1. Извлечь время в конце фрагмента: "19.30" / "19:30" (ТЗ 5.1)
+                const tMatch = frag.match(/\b(\d{1,2}[.:]\d{2})\s*$/);
+                if (tMatch) {
+                    ev.time = tMatch[1].replace(':', '.');
+                    const mins = parseInt(ev.time.split('.')[0], 10) * 60
+                               + parseInt(ev.time.split('.')[1], 10);
+                    ev.slot = (mins <= 15 * 60 + 30) ? 'morning' : 'evening';
+                }
+
+                // 2. Название = фрагмент без времени (UPPERCASE + trim, ТЗ 2.1)
+                ev.name = normalize(frag.replace(/\b\d{1,2}[.:]\d{2}\s*$/, ''));
+
+                // 3. Сверка с репертуаром (сервисная функция, не DOM)
+                ev.isKnown = !!findInRepertuar(ev.name);
+            }
+
+            results.push(ev);
+        }
+        return results;
+    }
+
+    // ============================================================
+    // ЗАДАЧА 3 (ТЗ п. 3.4): validateEvents — контекстная проверка
+    // событий инженера. Чистая функция: НЕ обращается к DOM.
+    // Вход:  events  — массив от parseCellEvents
+    //        rowData — {БС:'...', МС:'...', КС:'...', ЗРК:'...', ТГ:'...'}
+    //                  содержимое колонок площадок текущей строки
+    // Выход: тот же массив events с обновлёнными isValid / error.
+    // Правила:
+    //  service: isValid=true, если есть в repertuar; иначе 'Нет в репертуаре'.
+    //  venue без timeOfDay: isValid=true, если колонка площадки не пуста.
+    //  venue у/: в колонке есть событие со временем <= 15.30.
+    //  venue в/: в колонке есть событие со временем > 15.30 ИЛИ без времени
+    //           (дефолт вечера: БС=19.00, МС=19.30).
+    //  unknown: isValid=false, error='Неизвестный индекс'.
+    // ============================================================
+    function validateEvents(events, rowData) {
+        if (!Array.isArray(events)) return events;
+        const row = rowData || {};
+
+        for (const ev of events) {
+            ev.isValid = false;
+            ev.error = null;
+
+            if (ev.type === 'service') {
+                // Служебный индекс: сверка с репертуаром (ТЗ 3.4)
+                if (findInRepertuar(ev.service)) {
+                    ev.isValid = true;
+                } else {
+                    ev.error = 'Нет в репертуаре';
+                }
+                continue;
+            }
+
+            if (ev.type === 'venue') {
+                const cellText = String(row[ev.venue] !== undefined ? row[ev.venue] : '').trim();
+
+                if (!ev.timeOfDay) {
+                    // Без префикса: достаточно непустой колонки площадки (ТЗ 3.4)
+                    if (cellText) {
+                        ev.isValid = true;
+                    } else {
+                        ev.error = 'На ' + ev.venue + ' нет события';
+                    }
+                    continue;
+                }
+
+                if (!cellText) {
+                    ev.error = 'На ' + ev.venue + ' нет события';
+                    continue;
+                }
+
+                // Разбор колонки площадки по "+" и по слотам (ТЗ 5.1/3.4)
+                const slotOfFragment = (frag) => {
+                    const tMatch = frag.match(/\b(\d{1,2})[.:](\d{2})\s*$/);
+                    if (tMatch) {
+                        const mins = parseInt(tMatch[1], 10) * 60 + parseInt(tMatch[2], 10);
+                        return (mins <= 15 * 60 + 30) ? 'morning' : 'evening';
+                    }
+                    // Время только часами ("19") — тоже вечерний формат (ТЗ 3.2)
+                    const hMatch = frag.match(/\b(\d{1,2})\s*$/);
+                    if (hMatch) {
+                        const mins = parseInt(hMatch[1], 10) * 60;
+                        return (mins <= 15 * 60 + 30) ? 'morning' : 'evening';
+                    }
+                    // Время не указано -> дефолт: БС=19.00, МС=19.30 (вечер),
+                    // остальные площадки без времени считаем вечерними (ТЗ 3.2)
+                    return 'evening';
+                };
+
+                const fragments = cellText.split('+').map(s => s.trim()).filter(s => s.length > 0);
+                const foundSlot = fragments.map(slotOfFragment);
+
+                if (ev.timeOfDay === 'morning') {
+                    if (foundSlot.includes('morning')) {
+                        ev.isValid = true;
+                    } else {
+                        ev.error = 'у/' + ev.venue + ', а на ' + ev.venue + ' нет утреннего';
+                    }
+                } else { // evening
+                    if (foundSlot.includes('evening')) {
+                        ev.isValid = true;
+                    } else {
+                        ev.error = 'в/' + ev.venue + ', а на ' + ev.venue + ' нет вечернего';
+                    }
+                }
+                continue;
+            }
+
+            // unknown (и пустые фрагменты) — остаётся невалидным (ТЗ 3.4)
+            ev.error = 'Неизвестный индекс';
+        }
+
+        return events;
+    }
+
+    // --- Валидация ---
+    function onBlurVenue(cell) {
+        const txt = cell.textContent.trim();
+        cell.classList.remove('valid-name');
+        if (!txt) return;
+
+        const parts = txt.split('+').map(p => extractCleanName(p)).filter(p => p);
+        if (parts.some(p => findInRepertuar(p))) {
+            cell.classList.add('valid-name');
+        }
+    }
+
+    function revalidateAll() {
+        document.querySelectorAll('td[data-type="venue"]').forEach(c => {
+            if(c.textContent.trim()) onBlurVenue(c);
+        });
+    }
+
+    function normalize(str) {
+        return str ? String(str).toUpperCase().trim().replace(/\s+/g, ' ').replace(/["']/g, '') : '';
+    }
+
+    function extractCleanName(raw) {
+        let s = normalize(raw);
+        s = s.replace(/\s*\d{1,2}[.:]\d{2}/g, '').replace(/\s*\b\d{1,2}\b/g, '');
+        return s.replace(/\s+/g, ' ').trim();
+    }
+
+    function findInRepertuar(cleanName) {
+        if (!cleanName) return null;
+        return repertuar.find(r => r.normName === cleanName);
+    }
+
+    // --- Расчет коэффициентов ---
+    function recalcSummary() {
+        const stats = { 1: { days: 0, cInj: 0, cTech: 0 }, 2: { days: 0, cInj: 0, cTech: 0 }, 3: { days: 0, cInj: 0, cTech: 0 } };
+        const rows = document.querySelectorAll('#tableBody tr');
+
+        rows.forEach(row => {
+            const venueEvents = {};
+            VENUES.forEach(v => { const c = row.querySelector(`td[data-venue="${v}"]`); if (c && c.textContent.trim()) venueEvents[v] = c.textContent.trim(); });
+            const workedToday = { 1: false, 2: false, 3: false };
+
+            [1, 2, 3].forEach(idx => {
+                const engCell = row.querySelector(`td[data-eng="${idx}"]`);
+                if (!engCell || !engCell.textContent.trim()) return;
+
+                const tasks = engCell.textContent.split('+').map(s => normalize(s)).filter(s => s);
+                tasks.forEach(task => {
+                    let assignedVenue = VENUES.find(v => task.includes(v));
+                    let show = null;
+
+                    if (assignedVenue && venueEvents[assignedVenue]) {
+                        const rawEvent = venueEvents[assignedVenue].split('+')[0];
+                        show = findInRepertuar(extractCleanName(rawEvent));
+                    } else {
+                        show = findInRepertuar(task);
+                    }
+
+                    if (show) {
+                        let cInj = show.cInj;
+                        let cTech = show.cTech;
+
+                        if (show.count === 1 && assignedVenue) {
+                            if (show.zn[idx - 1] !== '+') cInj /= 2;
+                        }
+
+                        stats[idx].cInj += cInj;
+                        stats[idx].cTech += cTech;
+                        workedToday[idx] = true;
+                    }
+                });
+            });
+
+            [1, 2, 3].forEach(idx => { if (workedToday[idx]) stats[idx].days++; });
+        });
+        updateSummaryUI(stats);
+    }
+
+    function updateSummaryUI(stats) {
+        [1, 2, 3].forEach(idx => {
+            const s = stats[idx];
+            document.getElementById(`s-days-${idx}`).textContent = s.days;
+            document.getElementById(`s-cinj-${idx}`).textContent = s.cInj.toFixed(2);
+            document.getElementById(`s-ctech-${idx}`).textContent = s.cTech.toFixed(2);
+            document.getElementById(`s-rub-${idx}`).textContent = Math.round((s.cInj * weights.inj) + (s.cTech * weights.tech)).toLocaleString('ru-RU');
+        });
+    }
+
+    // --- Экспорт и GS ---
+    function exportCSV() {
+        let csv = '\uFEFF';
+        document.querySelectorAll('#schedTable tr').forEach(r => {
+            csv += Array.from(r.querySelectorAll('th, td')).map(c => `"${c.textContent.trim()}"`).join(',') + '\n';
+        });
+        downloadFile(csv, `Schedule_${MONTH}_${YEAR}.csv`, 'text/csv;charset=utf-8;');
+        showStatus('✅ CSV скачан', 'ok');
+    }
+    function openGModal() { document.getElementById('gModal').style.display = 'flex'; }
+    function closeGModal() { document.getElementById('gModal').style.display = 'none'; }
+    function loadGSUrl() { const u = localStorage.getItem('gs_url'); if(u) document.getElementById('gsUrl').value = u; }
+    function sendToGS() {
+        const url = document.getElementById('gsUrl').value.trim();
+        if(!url) return showStatus('❌ Введите URL', 'err');
+        localStorage.setItem('gs_url', url);
+        const payload = { month: MONTH, year: YEAR, weights: weights, repertuar: repertuar, schedule: [] };
+        document.querySelectorAll('#tableBody tr').forEach(row => {
+            const rd = { day: row.dataset.day, venues: {}, engineers: {} };
+            VENUES.forEach(v => rd.venues[v] = row.querySelector(`td[data-venue="${v}"]`).textContent.trim());
+            [1,2,3].forEach(i => rd.engineers[`INJ${i}`] = row.querySelector(`td[data-eng="${i}"]`).textContent.trim());
+            payload.schedule.push(rd);
+        });
+        fetch(url, { method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+        .then(() => { showStatus('✅ Отправлено', 'ok'); closeGModal(); })
+        .catch(e => showStatus('❌ Ошибка: ' + e, 'err'));
+    }
+    function showStatus(msg, type) {
+        const el = document.getElementById('statusMsg'); el.textContent = msg; el.className = `status-msg status-${type}`; el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 4000);
+    }
+    function downloadFile(content, filename, type) {
+        const blob = new Blob([content], {type}); const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob); link.download = filename; link.click();
+    }
+</script>
+</body>
+</html>
