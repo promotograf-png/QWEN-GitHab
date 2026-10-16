@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Калькулятор инженера v0.1</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background: #f5f5f5;
+    }
+    h1 {
+        color: #333;
+        font-size: 20px;
+    }
+    .controls {
+        margin-bottom: 15px;
+    }
+    .controls button {
+        padding: 8px 16px;
+        margin-right: 10px;
+        background: #1976d2;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .controls button:hover {
+        background: #1565c0;
+    }
+    .file-input {
+        display: inline-block;
+        padding: 8px 16px;
+        background: #43a047;
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .file-input:hover {
+        background: #388e3c;
+    }
+    .file-input input {
+        display: none;
+    }
+    #scheduleTable {
+        border-collapse: collapse;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        font-size: 13px;
+    }
+    #scheduleTable th, #scheduleTable td {
+        border: 1px solid #ccc;
+        padding: 4px 6px;
+        text-align: center;
+        min-width: 50px;
+        height: 24px;
+    }
+    #scheduleTable thead th {
+        background: #e3f2fd;
+        font-weight: bold;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    #scheduleTable td.day-col {
+        background: #f5f5f5;
+        font-weight: bold;
+        color: #555;
+    }
+    #scheduleTable td.venue-col {
+        background: #fff;
+        cursor: text;
+    }
+    #scheduleTable td.eng-col {
+        background: #fff;
+        cursor: text;
+        min-width: 180px;
+        text-align: left;
+        padding-left: 6px;
+    }
+    #scheduleTable td.eng-col:focus {
+        outline: 2px solid #1976d2;
+        background: #fffde7;
+    }
+    /* Подсветка ячеек инженеров */
+    #scheduleTable td.eng-cell-valid {
+        background: #fff9c4 !important;
+        color: #000;
+    }
+    #scheduleTable td.eng-cell-zero {
+        background: #fff !important;
+        color: #ff6f00;
+        font-weight: bold;
+    }
+    #scheduleTable td.eng-cell-invalid {
+        background: #fff !important;
+        color: #000;
+    }
+    /* Счётчики в tfoot */
+    #scheduleTable tfoot td {
+        background: #f5f5f5;
+        font-weight: bold;
+        color: #333;
+        padding: 6px 8px;
+    }
+    #scheduleTable tfoot td.counter-label {
+        text-align: right;
+        padding-right: 12px;
+    }
+    #scheduleTable tfoot td.counter-value {
+        text-align: center;
+        min-width: 60px;
+    }
+    .status {
+        margin-top: 10px;
+        padding: 8px;
+        background: #e8f5e9;
+        border-left: 4px solid #43a047;
+        font-size: 13px;
+        color: #2e7d32;
+    }
+    .status.error {
+        background: #ffebee;
+        border-left-color: #e53935;
+        color: #c62828;
+    }
+</style>
+</head>
+<body>
+
+<h1>Калькулятор инженера — базовый модуль <span style="color:#1976d2;">v0.1</span></h1>
+
+<div class="controls">
+    <label class="file-input">
+         Загрузить репертуар (Excel)
+        <input type="file" id="repertoireFile" accept=".xlsx,.xls">
+    </label>
+    <label class="file-input">
+         Загрузить расписание (Excel)
+        <input type="file" id="scheduleFile" accept=".xlsx,.xls">
+    </label>
+    <button id="saveBtn">💾 Сохранить расписание</button>
+</div>
+
+<div id="status" class="status" style="display:none;"></div>
+
+<table id="scheduleTable">
+    <thead>
+        <tr>
+            <th>Число</th>
+            <th>День</th>
+            <th>БС</th>
+            <th>МС</th>
+            <th>КС</th>
+            <th>ЗРК</th>
+            <th>ТГ</th>
+            <th>ИНЖ1</th>
+            <th>ИНЖ2</th>
+            <th>ИНЖ3</th>
+        </tr>
+    </thead>
+    <tbody id="scheduleBody">
+        <!-- Строки расписания генерируются JS -->
+    </tbody>
+    <tfoot id="scheduleFoot">
+        <tr>
+            <td colspan="7" class="counter-label">Событий:</td>
+            <td id="counter-events-eng1" class="counter-value">0</td>
+            <td id="counter-events-eng2" class="counter-value">0</td>
+            <td id="counter-events-eng3" class="counter-value">0</td>
+        </tr>
+        <tr>
+            <td colspan="7" class="counter-label">Дней:</td>
+            <td id="counter-days-eng1" class="counter-value">0</td>
+            <td id="counter-days-eng2" class="counter-value">0</td>
+            <td id="counter-days-eng3" class="counter-value">0</td>
+        </tr>
+    </tfoot>
+</table>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+// ============================================================
+// ГЛОБАЛЬНЫЕ ДАННЫЕ
+// ============================================================
+
+// Репертуар и коэффициенты: { "НАЗВАНИЕ": { coeff: 1.2, ... }, ... }
+let repertoire = {};
+
+// Расписание: массив строк, каждая строка = массив значений ячеек
+let scheduleData = [];
+
+// Дни недели
+const DAYS_OF_WEEK = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
+// Колонки инженеров (индексы в массиве строки): H=7, I=8, J=9
+const ENG_COLUMNS = [7, 8, 9];
+
+// ============================================================
+// УТИЛИТЫ
+// ============================================================
+
+function showStatus(message, isError = false) {
+    const el = document.getElementById('status');
+    el.textContent = message;
+    el.className = 'status' + (isError ? ' error' : '');
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ============================================================
+// ПАРСЕР СОДЕРЖИМОГО ЯЧЕЙКИ ИНЖЕНЕРА
+// ============================================================
+
+/**
+ * Разбирает текст ячейки на массив событий.
+ * Правила:
+ *  - Разделитель событий: "+"
+ *  - "МАРШАК 12+14" → два события: {МАРШАК,12}, {МАРШАК,14}
+ *  - "БЕСЫ 19 + СЪЕМКА" → два события: {БЕСЫ,19}, {СЪЕМКА}
+ *  - "МОНТ+СЪЕМКА+БАСИЛАШВИЛИ" → два события: {МОНТ}, {СЪЕМКА}
+ *    (БАСИЛАШВИЛИ не в репертуаре → игнорируется)
+ *  - Время в начале (без предыдущего названия) → игнорируется
+ */
+function parseCellEvents(text) {
+    if (!text) return [];
+
+    const parts = text.split('+').map(s => s.trim()).filter(s => s.length > 0);
+    const events = [];
+    let lastPlayName = null;
+
+    for (const part of parts) {
+        // 1. Проверяем: это ТОЛЬКО время?
+        const timeOnlyMatch = part.match(/^(\d{1,2}(:\d{2})?)$/);
+        if (timeOnlyMatch) {
+            if (lastPlayName) {
+                events.push({
+                    playName: lastPlayName,
+                    time: timeOnlyMatch[1]
+                });
+            }
+            continue;
+        }
+
+        // 2. Извлекаем название и время
+        const match = part.match(/^(.+?)\s+(\d{1,2}(:\d{2})?)?$/);
+        if (!match) continue;
+
+        const playName = match[1].trim().toUpperCase();
+        const time = match[2] || null;
+
+        // 3. Проверка в репертуаре
+        if (!repertoire[playName]) {
+            continue;
+        }
+
+        // 4. Создаём событие
+        events.push({
+            playName: playName,
+            time: time
+        });
+        lastPlayName = playName;
+    }
+
+    return events;
+}
+
+// ============================================================
+// ПЕРЕСЧЁТ СЧЁТЧИКОВ
+// ============================================================
+
+function updateCounters() {
+    const tbody = document.getElementById('scheduleBody');
+    if (!tbody) return;
+
+    const counters = {
+        1: { events: 0, days: 0 },
+        2: { events: 0, days: 0 },
+        3: { events: 0, days: 0 }
+    };
+
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        [7, 8, 9].forEach((colIdx, engIdx) => {
+            const engNum = engIdx + 1;
+            const cell = cells[colIdx];
+            if (!cell) return;
+
+            const text = cell.textContent.trim();
+            if (!text) return;
+
+            const events = parseCellEvents(text);
+            if (events.length > 0) {
+                counters[engNum].events += events.length;
+                counters[engNum].days += 1;
+            }
+        });
+    });
+
+    for (let eng = 1; eng <= 3; eng++) {
+        const eventsEl = document.getElementById(`counter-events-eng${eng}`);
+        const daysEl = document.getElementById(`counter-days-eng${eng}`);
+        if (eventsEl) eventsEl.textContent = counters[eng].events;
+        if (daysEl) daysEl.textContent = counters[eng].days;
+    }
+}
+
+// ============================================================
+// ВАЛИДАЦИЯ ЯЧЕЙКИ ИНЖЕНЕРА
+// ============================================================
+
+function validateCell(cell) {
+    const text = cell.textContent.trim();
+    cell.classList.remove('eng-cell-valid', 'eng-cell-zero', 'eng-cell-invalid');
+
+    if (!text) return;
+
+    const events = parseCellEvents(text);
+
+    if (events.length === 0) {
+        cell.classList.add('eng-cell-invalid');
+        return;
+    }
+
+    let hasPositive = false;
+    let allZero = true;
+    for (const ev of events) {
+        const coeff = repertoire[ev.playName]?.coeff ?? 0;
+        if (coeff > 0) {
+            hasPositive = true;
+            allZero = false;
+        }
+    }
+
+    if (hasPositive) {
+        cell.classList.add('eng-cell-valid');
+    } else if (allZero) {
+        cell.classList.add('eng-cell-zero');
+    }
+}
+
+// ============================================================
+// ГЕНЕРАЦИЯ ТАБЛИЦЫ РАСПИСАНИЯ
+// ============================================================
+
+function generateScheduleTable(data) {
+    const tbody = document.getElementById('scheduleBody');
+    tbody.innerHTML = '';
+
+    data.forEach((row, rowIdx) => {
+        const tr = document.createElement('tr');
+
+        for (let colIdx = 0; colIdx < 10; colIdx++) {
+            const td = document.createElement('td');
+            const value = row[colIdx] !== undefined ? row[colIdx] : '';
+            td.textContent = value;
+
+            if (colIdx === 0) {
+                td.classList.add('day-col');
+            } else if (colIdx === 1) {
+                td.classList.add('day-col');
+            } else if (colIdx >= 2 && colIdx <= 6) {
+                td.classList.add('venue-col');
+            } else if (colIdx >= 7 && colIdx <= 9) {
+                td.classList.add('eng-col');
+                td.contentEditable = 'true';
+
+                td.addEventListener('blur', function() {
+                    validateCell(this);
+                    updateCounters();
+                });
+
+                td.addEventListener('focus', function() {
+                    this.classList.remove('eng-cell-valid', 'eng-cell-zero', 'eng-cell-invalid');
+                });
+            }
+
+            tr.appendChild(td);
+        }
+
+        tbody.appendChild(tr);
+    });
+
+    const engCells = tbody.querySelectorAll('td.eng-col');
+    engCells.forEach(cell => {
+        if (cell.textContent.trim()) {
+            validateCell(cell);
+        }
+    });
+
+    updateCounters();
+}
+
+function generateEmptySchedule() {
+    const data = [];
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    for (let d = 1; d <= 31; d++) {
+        const row = new Array(10).fill('');
+        row[0] = d <= daysInMonth ? d : '';
+        if (d <= daysInMonth) {
+            const date = new Date(year, month, d);
+            row[1] = DAYS_OF_WEEK[date.getDay()];
+        }
+        data.push(row);
+    }
+    generateScheduleTable(data);
+}
+
+// ============================================================
+// ЗАГРУЗКА РЕПЕРТУАРА (Excel)
+// ============================================================
+
+document.getElementById('repertoireFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        try {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+            repertoire = {};
+            for (let i = 1; i < json.length; i++) {
+                const row = json[i];
+                if (!row || !row[0]) continue;
+                const name = String(row[0]).trim().toUpperCase();
+                const coeff = parseFloat(row[1]) || 0;
+                if (name) {
+                    repertoire[name] = { coeff: coeff };
+                }
+            }
+
+            showStatus(`✅ Репертуар загружен: ${Object.keys(repertoire).length} позиций`);
+            console.log('Репертуар:', repertoire);
+
+            const engCells = document.querySelectorAll('#scheduleBody td.eng-col');
+            engCells.forEach(cell => {
+                if (cell.textContent.trim()) {
+                    validateCell(cell);
+                }
+            });
+            updateCounters();
+        } catch (err) {
+            showStatus('❌ Ошибка загрузки репертуара: ' + err.message, true);
+            console.error(err);
+        }
+    }
+    reader.readAsArrayBuffer(file);
+});
+
+// ============================================================
+// ЗАГРУЗКА РАСПИСАНИЯ (Excel)
+// ============================================================
+
+document.getElementById('scheduleFile').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        try {
+            const data = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+            scheduleData = json.slice(1);
+
+            scheduleData.forEach(row => {
+                while (row.length < 10) row.push('');
+            });
+
+            generateScheduleTable(scheduleData);
+            showStatus(`✅ Расписание загружено: ${scheduleData.length} строк`);
+        } catch (err) {
+            showStatus('❌ Ошибка загрузки расписания: ' + err.message, true);
+            console.error(err);
+        }
+    }
+    reader.readAsArrayBuffer(file);
+});
+
+// ============================================================
+// СОХРАНЕНИЕ РАСПИСАНИЯ (Excel)
+// ============================================================
+
+document.getElementById('saveBtn').addEventListener('click', function() {
+    const tbody = document.getElementById('scheduleBody');
+    const rows = tbody.querySelectorAll('tr');
+    const exportData = [];
+
+    exportData.push(['Число', 'День', 'БС', 'МС', 'КС', 'ЗРК', 'ТГ', 'ИНЖ1', 'ИНЖ2', 'ИНЖ3']);
+
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const rowData = [];
+        cells.forEach(cell => {
+            rowData.push(cell.textContent);
+        });
+        exportData.push(rowData);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Расписание');
+    XLSX.writeFile(wb, 'schedule_export.xlsx');
+    showStatus('💾 Расписание сохранено');
+});
+
+// ============================================================
+// ИНИЦИАЛИЗАЦИЯ
+// ============================================================
+
+window.addEventListener('DOMContentLoaded', function() {
+    generateEmptySchedule();
+
+    repertoire = {
+        'МАРШАК': { coeff: 1.2 },
+        'БЕСЫ': { coeff: 1.3 },
+        'СЪЕМКА': { coeff: 0.5 },
+        'МОНТ': { coeff: 1.0 },
+        'СТАРШИЙ СЫН': { coeff: 1.1 },
+        'АКАДЕМИЯ СМЕХА': { coeff: 1.0 },
+        'ТРК': { coeff: 0.8 },
+        'РЕП': { coeff: 0.8 }
+    };
+    console.log('Демо-репертуар:', repertoire);
+});
+</script>
+
+</body>
+</html>
