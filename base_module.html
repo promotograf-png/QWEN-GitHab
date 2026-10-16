@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Калькулятор надбавок видеоцеха v0.6</title>
+    <title>Калькулятор надбавок видеоцеха v0.7</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -104,11 +104,50 @@
         .status-msg { padding: 10px; margin: 10px 0; border-radius: 4px; display: none; font-size: 14px; }
         .status-ok { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .status-err { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        /* ============================================================
+           ЗАДАЧА 6 (ТЗ пп. 5.3, 6.2, 6.3): плашки, счётчики, цвета площадок
+           ============================================================ */
+        /* --- ТЗ 5.3: индикация покрытия колонок площадок --- */
+        td.venue-covered { background: #fff9c4 !important; }   /* спокойный режим: полное покрытие */
+        td.venue-alert   { background: #ffebee !important; }   /* тревожный режим: неполное / 0 инженеров */
+
+        /* --- ТЗ 6.2: кастомные плашки (Floating Div) --- */
+        .plashka {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            white-space: nowrap;
+            z-index: 100;
+            pointer-events: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            animation: plashka-fade 2s ease-in-out forwards; /* висит 2 секунды, затем исчезает */
+        }
+        .plashka-info { background: #e3f2fd; color: #1565c0; }  /* голубая: «ОПЫТ N» */
+        .plashka-warn { background: #ff9800; color: #fff; }     /* оранжевая: «Многовато», «Никто не знает», ошибки */
+        @keyframes plashka-fade {
+            0%   { opacity: 0; margin-top: 4px; }
+            10%  { opacity: 1; margin-top: 0; }
+            80%  { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* --- ТЗ 6.3: строки счётчиков в tbody --- */
+        tr.counter-row td {
+            background: #f5f5f5 !important;
+            font-weight: bold;
+            color: #333;
+        }
+        td.counter-label { text-align: right; padding-right: 12px !important; }
+        td.counter-cell  { text-align: center; min-width: 60px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.6</span></h1>
+    <h1>🎭 Калькулятор надбавок видеоцеха <span style="color:#1976d2;">v0.7</span></h1>
     <div class="controls">
         <label for="repFile" class="file-label">Загрузить Репертуар (Excel)</label>
         <input type="file" id="repFile" accept=".xlsx,.xls">
