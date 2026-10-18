@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>График работы инженеров</title>
+    <title>График выхода инженеров _v3.1</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -200,7 +200,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">График работы инженеров в ........................</div>
+            <div class="title">График выхода инженеров _v3.1 в ........................</div>
             
             <div class="controls">
                 <div class="control-group">
@@ -253,7 +253,7 @@
         let currentMonth = 10;
         let currentYear = 2026;
         let scheduleData = [];
-        let repertoireData = [];
+        let repertoire = {}; // Ключ: название в UPPERCASE, значение: объект {ball_inj, ball_tech, eng_count, zn1, zn2, zn3}
         let currentCell = null;
 
         const DAYS_OF_WEEK = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -563,42 +563,48 @@
         }
 
         function processRepertoireData(data) {
-            repertoireData = [];
-            
+            repertoire = {};
+
             // Пропускаем заголовок (первая строка)
             for (let i = 1; i < data.length; i++) {
                 const row = data[i];
                 if (!row || row.length === 0) continue;
-                
-                const day = parseInt(row[0]);
-                if (!day || day < 1 || day > 31) continue;
-                
-                const venues = ['bs', 'ms', 'ks', 'zrk', 'tg', 'inj1', 'inj2', 'inj3'];
-                
-                venues.forEach((venue, idx) => {
-                    const value = row[idx + 2]; // +2 потому что колонка A - число, B - пустая
-                    if (value) {
-                        repertoireData.push({
-                            day: day,
-                            venue: venue,
-                            value: value.toString().trim()
-                        });
-                    }
-                });
-            }
-            
-            // Заполняем таблицу данными из репертуара
-            fillTableFromRepertoire();
-        }
 
-        function fillTableFromRepertoire() {
-            repertoireData.forEach(item => {
-                const cell = document.querySelector(`td[data-row="${item.day - 1}"][data-type="${item.venue}"]`);
-                if (cell) {
-                    cell.textContent = item.value;
-                    saveCellData(cell);
-                }
-            });
+                // Столбец A: Название спектакля
+                const name = row[0];
+                if (!name) continue;
+
+                // Приводим к UPPERCASE, удаляем кавычки и лишние пробелы
+                const normalizedName = name.toString().toUpperCase().replace(/“”"/g, '').trim();
+                if (!normalizedName) continue;
+
+                // Столбец B: балл_инж
+                const ball_inj = parseFloat(row[1]) || 0;
+
+                // Столбец C: балл_тех
+                const ball_tech = parseFloat(row[2]) || 0;
+
+                // Столбец D: количество инженеров
+                const eng_count = parseInt(row[3]) || 1;
+
+                // Столбцы E, F, G: зн1, зн2, зн3
+                const zn1 = row[4] ? row[4].toString().trim() : '+';
+                const zn2 = row[5] ? row[5].toString().trim() : '+';
+                const zn3 = row[6] ? row[6].toString().trim() : '+';
+
+                // Сохраняем в объект repertoire
+                repertoire[normalizedName] = {
+                    ball_inj: ball_inj,
+                    ball_tech: ball_tech,
+                    eng_count: eng_count,
+                    zn1: zn1,
+                    zn2: zn2,
+                    zn3: zn3
+                };
+            }
+
+            console.log('Репертуар загружен:', repertoire);
+            showStatus(`Репертуар загружен: ${Object.keys(repertoire).length} спектаклей`, 'success');
         }
 
         function exportToCSV() {
@@ -631,7 +637,7 @@
             const url = URL.createObjectURL(blob);
             
             link.setAttribute('href', url);
-            link.setAttribute('download', `график_${MONTHS[currentMonth - 1]}_${currentYear}.csv`);
+            link.setAttribute('download', `график_выхода_инженеров_${MONTHS[currentMonth - 1]}_${currentYear}.csv`);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
