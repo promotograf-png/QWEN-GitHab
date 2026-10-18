@@ -433,30 +433,126 @@
             });
         }
 
+        function parseCellEvents(cellValue, rowIndex) {
+            if (!cellValue) return [];
+
+            const events = [];
+            const parts = cellValue.split('+').map(p => p.trim().toUpperCase());
+
+            // Собираем события площадок для этой строки, чтобы привязать время
+            const rowVenues = {};
+            ['bs', 'ms', 'ks', 'zrk', 'tg'].forEach(venue => {
+                const venueCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${venue}"]`);
+                if (venueCell) {
+                    rowVenues[venue] = venueCell.textContent.trim().toUpperCase();
+                }
+            });
+
+            parts.forEach(part => {
+                if (!part) return;
+
+                let slot = 'evening'; // по умолчанию вечер
+                let venueCode = '';
+                let cleanPart = part;
+
+                // Определяем слот
+                if (part.startsWith('У/')) {
+                    slot = 'morning';
+                    cleanPart = part.substring(2).trim();
+                } else if (part.startsWith('В/')) {
+                    slot = 'evening';
+                    cleanPart = part.substring(2).trim();
+                }
+
+                // Определяем код площадки из ввода
+                const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
+                for (const [rus, code] of Object.entries(venueMap)) {
+                    if (cleanPart.includes(rus)) {
+                        venueCode = code;
+                        break;
+                    }
+                }
+
+                // Ищем событие в репертуаре по содержимому ячейки площадки
+                if (venueCode && rowVenues[venueCode]) {
+                    const eventName = rowVenues[venueCode];
+                    const repData = repertoire[eventName] || null;
+
+                    events.push({
+                        raw: part,
+                        venue: venueCode,
+                        slot: slot,
+                        eventName: eventName,
+                        repData: repData,
+                        isValid: !!repData
+                    });
+                } else {
+                    events.push({
+                        raw: part,
+                        venue: venueCode,
+                        slot: slot,
+                        eventName: null,
+                        repData: null,
+                        isValid: false
+                    });
+                }
+            });
+
+            return events;
+
+        }
+        function applyCellValidation(cell, status) {
+            // Сброс базовых классов валидации
+            cell.style.backgroundColor = '';
+            cell.style.color = '';
+
+        }
+
         function saveCellData(cell) {
             const row = parseInt(cell.dataset.row);
             const col = cell.dataset.type;
             const value = cell.textContent.trim();
             const dayNumber = row + 1;
-            
-            // Удаляем старую запись
+
+            // 1. Парсим события для этой ячейки
+            const parsedEvents = parseCellEvents(value, row);
+
+            // 2. Определяем статус валидации
+            let validationStatus = 'invalid';
+            if (value === '') {
+                validationStatus = 'empty';
+            } else {
+                const hasValidEvent = parsedEvents.some(e => e.isValid && e.repData && e.repData.ball_inj > 0);
+                const allZero = parsedEvents.length > 0 && parsedEvents.every(e => e.isValid && e.repData && e.repData.ball_inj === 0);
+
+                if (hasValidEvent) {
+                    validationStatus = 'valid';
+                } else if (allZero) {
+                    validationStatus = 'zero';
+                }
+            }
+
+            // 3. Обновляем массив данных с новыми полями
             scheduleData = scheduleData.filter(d => !(d.day === dayNumber && d.column === col));
-            
-            // Добавляем новую если есть значение
             if (value) {
                 scheduleData.push({
                     day: dayNumber,
                     column: col,
                     value: value,
+                    parsedEvents: parsedEvents,
+                    validationStatus: validationStatus,
                     month: currentMonth,
                     year: currentYear
                 });
             }
-            
+
+            // 4. Применяем визуальную валидацию
+            applyCellValidation(cell, validationStatus);
+
+            // 5. Сохраняем и обновляем
             saveToLocalStorage();
-            
-            // Обновляем счетчики (пока просто количество дней)
             updateCounters();
+
         }
 
         function handleKeyboardNavigation(e) {
