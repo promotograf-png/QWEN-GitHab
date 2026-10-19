@@ -1180,6 +1180,10 @@ function recalculateAllRows() {
             }
             
             console.log('Репертуар загружен:', repertoire);
+
+            // Пересчитываем всю таблицу с учётом нового репертуара
+            recalculateAllRows();
+
             showStatus(`Репертуар загружен: ${Object.keys(repertoire).length} спектаклей. Таблица пересчитана.`, 'success');
         }
 
