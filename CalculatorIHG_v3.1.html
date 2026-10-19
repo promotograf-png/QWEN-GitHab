@@ -433,16 +433,304 @@
             });
         }
 
+        function parseTimeFromEvent(eventName) {
+            // Извлекает время из названия события (например, "РЕП 12" -> 12, "ГАМЛЕТ 19.00" -> 19)
+            if (!eventName) return null;
+
+            // Ищем паттерн времени: число в конце строки (возможно с : или .)
+            const match = eventName.match(/(\d{1,2})[:.](\d{2})$/);
+            if (match) {
+                return parseInt(match[1]);
+            }
+
+            const matchHour = eventName.match(/(\d{1,2})$/);
+            if (matchHour) {
+                return parseInt(matchHour[1]);
+            }
+
+            return null; // время не найдено
+        }
+
+        function isMorningSlot(hour) {
+            // Утро: до 15:30 включительно
+            return hour !== null && hour <= 15;
+        }
+
+        function isEveningSlot(hour) {
+            // Вечер: после 15:30
+            return hour !== null && hour > 15;
+        }
+
+        let activeBubbles = new Map(); // key: "row-col", value: {element, type}
+
+        function showFloatingMessage(cell, message, type) {
+            // type: 'info' (исчезает через 2 сек) или 'error' (висит до исправления)
+            const key = `${cell.dataset.row}-${cell.dataset.col}`;
+
+            // Удаляем старую плашку этой ячейки, если есть
+            if (activeBubbles.has(key)) {
+                activeBubbles.get(key).element.remove();
+                activeBubbles.delete(key);
+            }
+
+            // Если сообщение пустое — не создаём плашку
+            if (!message) return;
+
+            // Создаём новую плашку
+            const bubble = document.createElement('div');
+            bubble.className = `bubble bubble-${type}`;
+            bubble.textContent = message;
+
+            const bgColor = type === 'error' ? '#ff9800' : '#e3f2fd';
+            const textColor = type === 'error' ? 'white' : '#333';
+
+            bubble.style.cssText = `
+                position: absolute;
+                background: ${bgColor};
+                color: ${textColor};
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: 500;
+                z-index: 1000;
+                pointer-events: none;
+                white-space: nowrap;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            `;
+
+            document.body.appendChild(bubble);
+
+            // Позиционируем над ячейкой
+            const rect = cell.getBoundingClientRect();
+            bubble.style.top = `${rect.top - 30 + window.scrollY}px`;
+            bubble.style.left = `${rect.left + window.scrollX}px`;
+
+            // Сохраняем ссылку
+            activeBubbles.set(key, { element: bubble, type: type });
+
+            // Если это информация — удаляем через 2 секунды
+            if (type === 'info') {
+                setTimeout(() => {
+                    if (activeBubbles.has(key) && activeBubbles.get(key).element === bubble) {
+                        bubble.remove();
+                        activeBubbles.delete(key);
+                    }
+                }, 2000);
+            }
+        }
+
+        function clearBubbleForCell(cell) {
+            const key = `${cell.dataset.row}-${cell.dataset.col}`;
+            if (activeBubbles.has(key)) {
+                activeBubbles.get(key).element.remove();
+                activeBubbles.delete(key);
+            }
+        }
+
+        function validateVenueCell(cell) {
+            const value = cell.textContent.trim();
+
+            // Сброс стилей
+            cell.style.backgroundColor = '';
+            cell.style.color = '';
+
+            if (!value) {
+                // Пустая ячейка — базовый белый фон
+                cell.style.backgroundColor = '#ffffff';
+                return;
+            }
+
+            // Извлекаем название события (первое слово или до пробела с цифрой)
+            const match = value.match(/^([А-ЯЁA-Z0-9\s\-]+?)(\s*\d|$)/i);
+            let eventName = '';
+
+            if (match) {
+                eventName = match[1].trim().toUpperCase().replace(/[“”«»"'']/g, '');
+            } else {
+                eventName = value.toUpperCase().replace(/[“”«»"'']/g, '').trim();
+            }
+
+            // Ищем в репертуаре
+            const repData = repertoire[eventName] || null;
+
+            if (repData) {
+                if (repData.ball_inj > 0) {
+                    // Событие найдено, балл > 0 -> жёлтый фон
+                    cell.style.backgroundColor = '#fff9c4';
+                    cell.style.color = '#000000';
+                } else {
+                    // Событие найдено, балл = 0 -> белый фон, оранжевый текст
+                    cell.style.backgroundColor = '#ffffff';
+                    cell.style.color = '#ff6d00';
+                }
+            } else {
+                // Событие не найдено -> белый фон, чёрный текст
+                cell.style.backgroundColor = '#ffffff';
+                cell.style.color = '#000000';
+            }
+        }
+
+        function validateEngineerCell(cell) {
+            const value = cell.textContent.trim();
+            const rowIndex = parseInt(cell.dataset.row);
+
+            // Определяем индекс инженера (1, 2 или 3)
+            const engineerIndex = cell.dataset.type.replace('inj', '');
+            const znKey = `zn${engineerIndex}`;
+
+            // Сброс стилей к базовому цвету колонки
+            cell.style.backgroundColor = '';
+            cell.style.color = '';
+
+            // Удаляем старые плашки ошибок этой ячейки
+            clearBubbleForCell(cell);
+
+            if (!value) {
+                return; // пустая ячейка — базовый цвет
+            }
+
+            // Парсим ввод инженера
+            const parts = value.split('+').map(p => p.trim().toUpperCase());
+
+            let hasSlotError = false;
+            let hasValidEvent = false;
+            let hasAnyEvent = false;
+            let slotErrorMessage = '';
+            let infoMessages = []; // информационные плашки (исчезают)
+
+            // Собираем события площадок этой строки
+            const rowVenues = {};
+            ['bs', 'ms', 'ks', 'zrk', 'tg'].forEach(venue => {
+                const venueCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${venue}"]`);
+                if (venueCell) {
+                    rowVenues[venue] = venueCell.textContent.trim();
+                }
+            });
+
+            parts.forEach(part => {
+                if (!part) return;
+                hasAnyEvent = true;
+
+                let slot = 'evening'; // по умолчанию
+                let cleanPart = part;
+
+                // Определяем слот
+                if (part.startsWith('У/')) {
+                    slot = 'morning';
+                    cleanPart = part.substring(2).trim();
+                } else if (part.startsWith('В/')) {
+                    slot = 'evening';
+                    cleanPart = part.substring(2).trim();
+                }
+
+                // Определяем площадку
+                const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
+                let venueCode = '';
+                for (const [rus, code] of Object.entries(venueMap)) {
+                    if (cleanPart.includes(rus)) {
+                        venueCode = code;
+                        break;
+                    }
+                }
+
+                if (!venueCode || !rowVenues[venueCode]) {
+                    // Площадка не указана или пуста
+                    return;
+                }
+
+                const venueValue = rowVenues[venueCode];
+                const eventHour = parseTimeFromEvent(venueValue);
+
+                // Проверяем соответствие слота
+                if (eventHour !== null) {
+                    const isMorning = isMorningSlot(eventHour);
+                    const isEvening = isEveningSlot(eventHour);
+
+                    if (slot === 'morning' && !isMorning) {
+                        hasSlotError = true;
+                        slotErrorMessage = `Ошибка слота: ${eventHour}:00 — вечер, а вы указали утро`;
+                    } else if (slot === 'evening' && !isEvening) {
+                        hasSlotError = true;
+                        slotErrorMessage = `Ошибка слота: ${eventHour}:00 — утро, а вы указали вечер`;
+                    } else {
+                        // Слот совпадает — ищем событие в репертуаре
+                        const match = venueValue.match(/^([А-ЯЁA-Z0-9\s\-]+?)(\s*\d|$)/i);
+                        let eventName = '';
+                        if (match) {
+                            eventName = match[1].trim().toUpperCase().replace(/[“”«»"'']/g, '');
+                        } else {
+                            eventName = venueValue.toUpperCase().replace(/[“”«»"'']/g, '').trim();
+                        }
+
+                        const repData = repertoire[eventName];
+                        if (repData) {
+                            hasValidEvent = true;
+
+                            // Проверяем знание инженера
+                            const znValue = repData[znKey];
+                            if (znValue && znValue !== '+') {
+                                infoMessages.push(`ОПЫТ ${znValue}`);
+                            }
+                        }
+                    }
+                } else {
+                    // Время не указано в названии — считаем слот корректным по умолчанию
+                    const match = venueValue.match(/^([А-ЯЁA-Z0-9\s\-]+?)(\s*\d|$)/i);
+                    let eventName = '';
+                    if (match) {
+                        eventName = match[1].trim().toUpperCase().replace(/[“”«»"'']/g, '');
+                    } else {
+                        eventName = venueValue.toUpperCase().replace(/[“”«»"'']/g, '').trim();
+                    }
+
+                    const repData = repertoire[eventName];
+                    if (repData) {
+                        hasValidEvent = true;
+                        const znValue = repData[znKey];
+                        if (znValue && znValue !== '+') {
+                            infoMessages.push(`ОПЫТ ${znValue}`);
+                        }
+                    }
+                }
+            });
+
+            // Применяем визуализацию
+            if (hasSlotError) {
+                // Ошибка слота — оранжевый текст, белая ячейка + плашка ошибки
+                cell.style.backgroundColor = '#ffffff';
+                cell.style.color = '#ff6d00';
+                showFloatingMessage(cell, slotErrorMessage, 'error');
+            } else if (hasValidEvent) {
+                // Валидное событие — базовый цвет колонки (НЕ перекрашиваем)
+                // Просто показываем информационные плашки
+                infoMessages.forEach(msg => {
+                    showFloatingMessage(cell, msg, 'info');
+                });
+            } else if (hasAnyEvent) {
+                // Что-то введено, но не распознано — белый фон, чёрный текст
+                cell.style.backgroundColor = '#ffffff';
+                cell.style.color = '#000000';
+            }
+        }
+
         function saveCellData(cell) {
             const row = parseInt(cell.dataset.row);
             const col = cell.dataset.type;
             const value = cell.textContent.trim();
             const dayNumber = row + 1;
-            
-            // Удаляем старую запись
+
+            // Определяем тип ячейки и вызываем соответствующую валидацию
+            const isVenue = ['bs', 'ms', 'ks', 'zrk', 'tg'].includes(col);
+            const isEngineer = ['inj1', 'inj2', 'inj3'].includes(col);
+
+            if (isVenue) {
+                validateVenueCell(cell);
+            } else if (isEngineer) {
+                validateEngineerCell(cell);
+            }
+
+            // Обновляем scheduleData
             scheduleData = scheduleData.filter(d => !(d.day === dayNumber && d.column === col));
-            
-            // Добавляем новую если есть значение
             if (value) {
                 scheduleData.push({
                     day: dayNumber,
@@ -452,10 +740,8 @@
                     year: currentYear
                 });
             }
-            
+
             saveToLocalStorage();
-            
-            // Обновляем счетчики (пока просто количество дней)
             updateCounters();
         }
 
