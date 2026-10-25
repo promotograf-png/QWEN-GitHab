@@ -177,6 +177,36 @@
             filter: none !important;
         }
         
+        /* Стили счётчиков в <tfoot> (ТЗ v3.1, блок 5) */
+        #counterFoot tr.counter-foot-row {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        
+        #counterFoot td {
+            background: #f5f5f5;
+            font-weight: bold;
+            cursor: default;
+        }
+        
+        #counterFoot .counter-foot-label {
+            text-align: right;
+            padding-right: 15px;
+        }
+        
+        #counterFoot .counter-foot-value {
+            color: #333;
+        }
+        
+        #counterFoot tr {
+            position: sticky;
+            z-index: 9;
+        }
+        
+        #counterFoot tr.counter-foot-row:nth-child(1) { bottom: 66px; }
+        #counterFoot tr.counter-foot-row:nth-child(2) { bottom: 33px; }
+        #counterFoot tr.counter-foot-row:nth-child(3) { bottom: 0; }
+        
         .status {
             margin-top: 15px;
             padding: 10px;
@@ -244,6 +274,29 @@
                 </thead>
                 <tbody id="tableBody">
                 </tbody>
+                <tfoot id="counterFoot">
+                    <tr class="counter-foot-row">
+                        <td class="counter-foot-label" colspan="7">Баллы инж:</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj3">0</td>
+                        <td></td>
+                    </tr>
+                    <tr class="counter-foot-row">
+                        <td class="counter-foot-label" colspan="7">Баллы тех:</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj3">0</td>
+                        <td></td>
+                    </tr>
+                    <tr class="counter-foot-row">
+                        <td class="counter-foot-label" colspan="7">Рабочих дней:</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj3">0</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
