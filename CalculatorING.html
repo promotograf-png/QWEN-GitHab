@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>График работы инженеров _v3.0</title>
+    <title>График работы инженеров _v3.1</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -208,12 +208,29 @@
             color: #c62828;
             display: block;
         }
+
+        /* Счётчики в <tfoot> — ТЗ п. 5.1–5.3 */
+        #counterFoot td {
+            background: #f5f5f5;
+            font-weight: bold;
+            cursor: default !important;
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+        }
+        #counterFoot .counter-foot-label {
+            text-align: right !important;
+            padding-right: 15px !important;
+        }
+        #counterFoot td:hover {
+            filter: none !important;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">График работы инженеров _v3.0 в ........................</div>
+            <div class="title">График работы инженеров _v3.1 в ........................</div>
             
             <div class="controls">
                 <div class="control-group">
@@ -258,6 +275,29 @@
                 </thead>
                 <tbody id="tableBody">
                 </tbody>
+                <tfoot id="counterFoot">
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Баллы инж:</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Баллы тех:</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Рабочих дней:</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
