@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>График работы инженеров</title>
+    <title>График работы инженеров _v3.0</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
@@ -144,6 +144,19 @@
         .col-inj1 { background: #e8f5e9; }
         .col-inj2 { background: #ffe8e1; }
         .col-inj3 { background: #fffde7; }
+        .col-status {
+            background: #fafafa;
+            min-width: 200px;
+            text-align: left !important;
+            font-size: 12px;
+            vertical-align: top;
+            padding: 8px;
+        }
+        .status-error {
+            background: #ffebee;
+            color: #c62828;
+            font-weight: 500;
+        }
         
         .editable {
             cursor: text;
@@ -200,7 +213,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">График работы инженеров в ........................</div>
+            <div class="title">График работы инженеров _v3.0 в ........................</div>
             
             <div class="controls">
                 <div class="control-group">
@@ -240,6 +253,7 @@
                         <th>ИНЖ1</th>
                         <th>ИНЖ2</th>
                         <th>ИНЖ3</th>
+                        <th>Статус</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -253,7 +267,7 @@
         let currentMonth = 10;
         let currentYear = 2026;
         let scheduleData = [];
-        let repertoireData = [];
+        let repertoire = {}; // Ключ: название в UPPERCASE, значение: объект {ball_inj, ball_tech, eng_count, zn1, zn2, zn3}
         let currentCell = null;
 
         const DAYS_OF_WEEK = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -345,15 +359,26 @@
                         
                         row.appendChild(cell);
                     });
+                    
+                    // Ячейка статуса (колонка K)
+                    const statusCell = document.createElement('td');
+                    statusCell.className = 'col-status';
+                    statusCell.dataset.row = i;
+                    statusCell.dataset.col = 10;
+                    statusCell.dataset.type = 'status';
+                    statusCell.contentEditable = false;
+                    row.appendChild(statusCell);
                 } else {
                     // Пустые строки
                     row.className = 'empty-row';
-                    for (let j = 0; j < 10; j++) {
+                    for (let j = 0; j < 11; j++) {
                         const cell = document.createElement('td');
                         if (j === 0) {
                             cell.className = 'col-date';
                         } else if (j === 1) {
                             cell.className = 'col-day';
+                        } else if (j === 10) {
+                            cell.className = 'col-status';
                         } else {
                             cell.className = `col-${['bs', 'ms', 'ks', 'zrk', 'tg', 'inj1', 'inj2', 'inj3'][j-2]}`;
                         }
@@ -563,42 +588,17 @@
         }
 
         function processRepertoireData(data) {
-            repertoireData = [];
+            repertoire = {};
             
-            // Пропускаем заголовок (первая строка)
-            for (let i = 1; i < data.length; i++) {
-                const row = data[i];
-                if (!row || row.length === 0) continue;
-                
-                const day = parseInt(row[0]);
-                if (!day || day < 1 || day > 31) continue;
-                
-                const venues = ['bs', 'ms', 'ks', 'zrk', 'tg', 'inj1', 'inj2', 'inj3'];
-                
-                venues.forEach((venue, idx) => {
-                    const value = row[idx + 2]; // +2 потому что колонка A - число, B - пустая
-                    if (value) {
-                        repertoireData.push({
-                            day: day,
-                            venue: venue,
-                            value: value.toString().trim()
-                        });
-                    }
-                });
-            }
+            // TODO (Правка 0.9): логика парсинга репертуара по ТЗ будет добавлена в следующей правке.
+            // Старая логика удалена, так как опиралась на repertoireData (массив записей по площадкам).
             
             // Заполняем таблицу данными из репертуара
             fillTableFromRepertoire();
         }
 
         function fillTableFromRepertoire() {
-            repertoireData.forEach(item => {
-                const cell = document.querySelector(`td[data-row="${item.day - 1}"][data-type="${item.venue}"]`);
-                if (cell) {
-                    cell.textContent = item.value;
-                    saveCellData(cell);
-                }
-            });
+            // TODO (Правка 0.9): переработать под структуру repertoire = {}
         }
 
         function exportToCSV() {
