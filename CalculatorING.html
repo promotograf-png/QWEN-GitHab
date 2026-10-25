@@ -589,16 +589,30 @@
 
         function processRepertoireData(data) {
             repertoire = {};
-            
-            // TODO (Правка 0.9): логика парсинга репертуара по ТЗ будет добавлена в следующей правке.
-            // Старая логика удалена, так как опиралась на repertoireData (массив записей по площадкам).
-            
-            // Заполняем таблицу данными из репертуара
-            fillTableFromRepertoire();
-        }
-
-        function fillTableFromRepertoire() {
-            // TODO (Правка 0.9): переработать под структуру repertoire = {}
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0) continue;
+                const name = row[0];
+                if (!name) continue;
+                const normalizedName = name.toString().toUpperCase().replace(/[“”«»’’'']/g, '').trim();
+                if (!normalizedName) continue;
+                const ball_inj = parseFloat(row[1]) || 0;
+                const ball_tech = parseFloat(row[2]) || 0;
+                const eng_count = parseInt(row[3]) || 1;
+                const zn1 = row[4] ? row[4].toString().trim() : '+';
+                const zn2 = row[5] ? row[5].toString().trim() : '+';
+                const zn3 = row[6] ? row[6].toString().trim() : '+';
+                repertoire[normalizedName] = {
+                    ball_inj: ball_inj,
+                    ball_tech: ball_tech,
+                    eng_count: eng_count,
+                    zn1: zn1,
+                    zn2: zn2,
+                    zn3: zn3
+                };
+            }
+            console.log('Репертуар загружен:', repertoire);
+            showStatus(`Репертуар загружен: ${Object.keys(repertoire).length} спектаклей`, 'success');
         }
 
         function exportToCSV() {
@@ -631,7 +645,7 @@
             const url = URL.createObjectURL(blob);
             
             link.setAttribute('href', url);
-            link.setAttribute('download', `график_${MONTHS[currentMonth - 1]}_${currentYear}.csv`);
+            link.setAttribute('download', `CalculatorIHG_v3.0_${MONTHS[currentMonth - 1]}_${currentYear}.csv`);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
