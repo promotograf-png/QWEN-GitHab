@@ -784,45 +784,52 @@
                 const assignedEngineers = [];
                 ['inj1', 'inj2', 'inj3'].forEach((engCol, engIndex) => {
                     const engCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${engCol}"]`);
-                    if (engCell) {
-                        const engValue = engCell.textContent.trim().toUpperCase();
-                        const engParts = engValue.split('+').map(p => p.trim());
-                        engParts.forEach(engPart => {
-                            if (!engPart) return;
-                            let engSlot = 'evening';
-                            let engVenue = '';
-                            let cleanEngPart = engPart;
-                            if (engPart.startsWith('У/')) {
-                                engSlot = 'morning';
-                                cleanEngPart = engPart.substring(2).trim();
-                            } else if (engPart.startsWith('В/')) {
-                                engSlot = 'evening';
-                                cleanEngPart = engPart.substring(2).trim();
+                    if (!engCell) return;
+                    const engValue = engCell.textContent.trim().toUpperCase();
+                    const engParts = engValue.split('+').map(p => p.trim());
+                    const engAssignments = [];
+                    engParts.forEach(engPart => {
+                        if (!engPart) return;
+                        let engSlot = 'evening';
+                        let cleanEngPart = engPart;
+                        if (engPart.startsWith('У/')) {
+                            engSlot = 'morning';
+                            cleanEngPart = engPart.substring(2).trim();
+                        } else if (engPart.startsWith('В/')) {
+                            engSlot = 'evening';
+                            cleanEngPart = engPart.substring(2).trim();
+                        }
+                        const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
+                        let engVenue = '';
+                        for (const [rus, code] of Object.entries(venueMap)) {
+                            if (cleanEngPart.includes(rus)) {
+                                engVenue = code;
+                                break;
                             }
-                            const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
-                            for (const [rus, code] of Object.entries(venueMap)) {
-                                if (cleanEngPart.includes(rus)) {
-                                    engVenue = code;
-                                    break;
-                                }
-                            }
-                            if (engVenue === event.venue && engSlot !== event.slot) {
-                                    const expectedSlotText = event.slot === 'morning' ? 'утро' : 'вечер';
-                                    const actualSlotText = engSlot === 'morning' ? 'утро' : 'вечер';
-                                    const timeText = event.hour + (event.minute > 0 ? ':' + (event.minute < 10 ? '0' + event.minute : event.minute) : ':00');
-                                    warnings.push({
-                                        type: 'error',
-                                        message: 'Ошибка слота: ' + timeText + ' - ' + expectedSlotText + ', а вы указали ' + actualSlotText
-                                    });
-                                } else {
-                                const znKey = `zn${engIndex + 1}`;
-                                const znValue = repData[znKey];
-                                assignedEngineers.push({
-                                    engineer: engCol,
-                                    engineerIndex: engIndex + 1,
-                                    knowledge: znValue
-                                });
-                            }
+                        }
+                        if (engVenue === event.venue) {
+                            engAssignments.push({ slot: engSlot });
+                        }
+                    });
+                    // Инженер назначен на событие, если среди его записей этой площадки
+                    // есть запись со слотом события (порядок "у/" и "в/" в ячейке не важен)
+                    const matchingAssignment = engAssignments.find(a => a.slot === event.slot);
+                    if (matchingAssignment) {
+                        const znKey = `zn${engIndex + 1}`;
+                        const znValue = repData[znKey];
+                        assignedEngineers.push({
+                            engineer: engCol,
+                            engineerIndex: engIndex + 1,
+                            knowledge: znValue
+                        });
+                    } else if (engAssignments.length > 0) {
+                        // Есть записи на эту площадку, но ни одна не совпала со слотом события — блокирующая ошибка
+                        const expectedSlotText = event.slot === 'morning' ? 'утро' : 'вечер';
+                        const actualSlots = engAssignments.map(a => a.slot === 'morning' ? 'утро' : 'вечер').join(', ');
+                        const timeText = event.hour + (event.minute > 0 ? ':' + (event.minute < 10 ? '0' + event.minute : event.minute) : ':00');
+                        warnings.push({
+                            type: 'error',
+                            message: `Ошибка слота: ${timeText} - ${expectedSlotText}, а вы указали ${actualSlots}`
                         });
                     }
                 });
