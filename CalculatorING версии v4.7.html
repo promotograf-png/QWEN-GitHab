@@ -986,29 +986,26 @@
                 const venueCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${venueMap[venueKey]}"]`);
                 if (!venueCell) return;
                 const venueEvents = parseVenueEvents(venueCell.textContent);
-                const matchingEvents = venueEvents.filter(ev => {
+                let matchedRep = null;
+                for (const ev of venueEvents) {
                     if (ev.hour === null) {
-                        // Событие без времени: время по умолчанию для площадки
-                        const defaultTimesByCode = { 'bs': 19, 'ms': 19.5, 'zrk': 16 };
-                        const defHour = defaultTimesByCode[venueMap[venueKey]] !== undefined ? defaultTimesByCode[venueMap[venueKey]] : 19;
-                        ev.hour = Math.floor(defHour);
-                        ev.minute = (defHour % 1) ? 30 : 0;
+                        const defaultTimes = { 'БС': 19, 'МС': 19.5, 'ЗРК': 16 };
+                        ev.hour = defaultTimes[venueKey] || 19;
+                        ev.minute = 0;
                     }
-                    const evSlot = isMorningSlot({ hour: ev.hour, minute: ev.minute || 0 }) ? 'morning' : 'evening';
-                    return evSlot === slot;
-                });
-
-                matchingEvents.forEach(ev => {
                     const evName = ev.name.toUpperCase();
-                    const rep = repertoire[evName];
-                    if (!rep) return;
+                    if (repertoire[evName]) {
+                        matchedRep = repertoire[evName];
+                        break;
+                    }
+                }
+                if (matchedRep) {
                     hasValid = true;
-
+                    const rep = matchedRep;
                     const znKey = `zn${engIndex}`;
                     const engStatus = rep[znKey];
                     const isExperienced = engStatus === '+' || engStatus === 'plus';
 
-                    // Кто назначен на это же событие (тот же слот и площадка)
                     const assigned = [];
                     for (let i = 1; i <= 3; i++) {
                         const otherCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="inj${i}"]`);
@@ -1019,13 +1016,10 @@
                         otherParts.forEach(op => {
                             const opTrimmed = op.trim();
                             if (!opTrimmed) return;
-                            let opSlot = 'evening';
                             let opName = opTrimmed;
                             if (opTrimmed.startsWith('У/') || opTrimmed.startsWith('у/')) {
-                                opSlot = 'morning';
                                 opName = opTrimmed.substring(2);
                             } else if (opTrimmed.startsWith('В/') || opTrimmed.startsWith('в/')) {
-                                opSlot = 'evening';
                                 opName = opTrimmed.substring(2);
                             }
                             if (opName.toUpperCase().startsWith(venueKey)) {
@@ -1059,7 +1053,7 @@
 
                     totalBallInj += rep.ball_inj * injMult;
                     totalBallTech += rep.ball_tech * techMult;
-                });
+                }
             });
 
             return { ballInj: totalBallInj, ballTech: totalBallTech, hasValidEvent: hasValid };
