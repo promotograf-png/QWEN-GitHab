@@ -460,10 +460,6 @@
         }
 
         function generateTable() {
-            currentMonth = parseInt(document.getElementById('month').value);
-            currentYear = parseInt(document.getElementById('year').value);
-
-            // Загружаем из localStorage массив данных именно для текущего месяца/года
             const saved = localStorage.getItem('engineerSchedule');
             if (saved) {
                 try {
@@ -495,7 +491,10 @@
             } else {
                 scheduleData = [];
             }
-            
+
+            currentMonth = parseInt(document.getElementById('month').value);
+            currentYear = parseInt(document.getElementById('year').value);
+
             if (!currentMonth || currentMonth < 1 || currentMonth > 12) {
                 showStatus('Неверный месяц', 'error');
                 return;
