@@ -231,6 +231,17 @@
         #counterFoot td:hover {
             filter: none !important;
         }
+        @media print {
+            @page { size: landscape; margin: 1cm; }
+            body { background: white; padding: 0; }
+            .container > .header { display: none !important; }
+            .instruction { display: none !important; }
+            #reportTab { display: block !important; margin: 0; padding: 0; box-shadow: none; }
+            .no-print { display: none !important; }
+            .table-container { max-height: none !important; border: none !important; overflow: visible !important; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+        }
     </style>
 </head>
 <body>
@@ -1061,15 +1072,19 @@
             document.getElementById('month').value = currentMonth;
             document.getElementById('year').value = currentYear;
             // Загружаем репертуар из localStorage
+            console.log('ДИАГНОСТИКА: Проверяем localStorage ключ "repertoireData"...');
             const savedRepertoire = localStorage.getItem('repertoireData');
             if (savedRepertoire) {
+                console.log('ДИАГНОСТИКА: Данные найдены, длина строки:', savedRepertoire.length);
                 try {
                     repertoire = JSON.parse(savedRepertoire);
-                    console.log('Репертуар загружен из localStorage:', repertoire);
+                    console.log('ДИАГНОСТИКА: Успешно загружено спектаклей:', Object.keys(repertoire).length);
                 } catch (e) {
-                    console.error('Ошибка загрузки репертуара из localStorage:', e);
+                    console.error('ДИАГНОСТИКА: Ошибка парсинга JSON:', e);
                     repertoire = {};
                 }
+            } else {
+                console.log('ДИАГНОСТИКА: Ключ "repertoireData" пуст. Требуется ручная загрузка файла.');
             }
             // КРИТИЧЕСКИ ВАЖНО: После загрузки данных (или если их нет) обязательно генерируем таблицу
             generateTable();
@@ -1767,8 +1782,9 @@
                                 assignedEngineers.push({ engIndex, knowledge });
                             }
                         }
+                        const timeStr = event.hour !== null ? `${event.hour}:${(event.minute || 0).toString().padStart(2, '0')}` : 'время не указано';
                         if (assignedEngineers.length === 0) {
-                            warnings.push(`Событие "${event.name}" на площадке ${venueMap[venueCode]} (${rowData.day} ${rowData.month}) не имеет назначенных инженеров.`);
+                            warnings.push(`Событие "${event.name}" на площадке ${venueMap[venueCode]} (${timeStr}) не имеет назначенных инженеров.`);
                         }
                         const morningAssigned = assignedEngineers.filter(e => {
                             const engCol = `inj${e.engIndex}`;
@@ -1781,7 +1797,7 @@
                             return val && (val.toUpperCase().includes('В/' + venueMap[venueCode]) || !val.toUpperCase().startsWith('У/'));
                         });
                         if (eventSlot === 'morning' && morningAssigned.length > 0 && eveningAssigned.length === 0) {
-                            warnings.push(`Для утреннего события "${event.name}" на ${venueMap[venueCode]} (${rowData.day} ${rowData.month}) указан у/, но нет инженера с в/ для подстраховки.`);
+                            warnings.push(`Для утреннего события "${event.name}" на ${venueMap[venueCode]} (${timeStr}) указан у/, но нет инженера с в/ для подстраховки.`);
                         }
                     });
                 });
