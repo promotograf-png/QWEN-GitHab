@@ -1693,7 +1693,9 @@
             generateReportData();
         }
 
+        let pendingReportData = null;
         function generateReportData() {
+            const warnings = [];
             const priceInj = parseFloat(document.getElementById('reportPriceInj').value) || 950;
             const priceTech = parseFloat(document.getElementById('reportPriceTech').value) || 815;
             const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
