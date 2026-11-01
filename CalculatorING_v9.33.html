@@ -332,7 +332,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">График работы инженеров _v9.32 <span id="headerMonthYear"></span></div>
+            <div class="title">График работы инженеров _v9.33 <span id="headerMonthYear"></span></div>
             
             <div class="controls">
                 <div class="control-group">
@@ -1858,18 +1858,26 @@
             engineerNames.inj3 = document.getElementById('engName3').value.trim() || 'Инженер 3';
             localStorage.setItem('engineerNames', JSON.stringify(engineerNames));
         }
+        function updateScheduleHeaders() {
+            ['1', '2', '3'].forEach(n => {
+                const th = document.getElementById('thInj' + n);
+                if (th) th.textContent = engineerNames['inj' + n];
+            });
+        }
         document.addEventListener('DOMContentLoaded', function() {
             loadEngineerNames();
             ['engName1', 'engName2', 'engName3'].forEach(id => {
-                document.getElementById(id).addEventListener('input', saveEngineerNames);
-            });
-            // ПРАВКА 68: обновление заголовков таблицы Графика именами инженеров
-            ['1', '2', '3'].forEach(n => {
-                document.getElementById('engName' + n).addEventListener('input', function() {
-                    const val = this.value.trim() || ('ИНЖ' + n);
-                    document.getElementById('thInj' + n).textContent = val;
+                document.getElementById(id).addEventListener('input', function() {
+                    saveEngineerNames();
+                    updateScheduleHeaders();
                 });
             });
+            // ПРАВКА 80: загрузка имён до генерации таблицы — вызов generateTable после loadEngineerNames
+            if (typeof generateTable === 'function') {
+                generateTable();
+            }
+            // ПРАВКА 80: обновление заголовков таблицы Графика сразу при загрузке страницы
+            updateScheduleHeaders();
         });
         function generateReportData() {
             const warnings = [];
