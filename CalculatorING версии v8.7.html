@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>График работы инженеров _v6.1</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 600;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            margin-bottom: 20px;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        label {
+            font-weight: 500;
+        }
+        
+        input[type="number"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 80px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #1976D2;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: calc(100vh - 250px);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        th {
+            background: #f5f5f5;
+            padding: 10px 8px;
+            text-align: center;
+            font-weight: 600;
+            border: 1px solid #ddd;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+            min-width: 100px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        td:hover {
+            filter: brightness(0.95);
+        }
+        
+        td:focus {
+            outline: 2px solid #2196F3;
+            outline-offset: -2px;
+        }
+        
+        .col-date, .col-day {
+            background: #fafafa;
+            font-weight: 500;
+            min-width: 60px;
+        }
+        
+        .col-bs { background: white; }
+        .col-ms { background: white; }
+        .col-ks { background: white; }
+        .col-zrk { background: white; }
+        .col-tg { background: white; }
+        .col-inj1 { background: #e8f5e9; }
+        .col-inj2 { background: #ffe8e1; }
+        .col-inj3 { background: #fffde7; }
+        .col-status {
+            background: #ffffff;
+            min-width: 200px;
+            text-align: left !important;
+            font-size: 12px;
+            vertical-align: top;
+            padding: 8px;
+        }
+        .status-error {
+            background: #ffffff;
+            color: #b71c1c;
+            font-weight: 500;
+        }
+        
+        .editable {
+            cursor: text;
+        }
+        
+        .empty-row {
+            background: #f9f9f9;
+        }
+        
+        /* Стили для строк счетчиков */
+        .counter-row {
+            background: #f0f0f0;
+            font-weight: 600;
+        }
+        
+        .counter-label {
+            text-align: right !important;
+            padding-right: 15px !important;
+            background: #e8e8e8 !important;
+            font-weight: 600;
+        }
+        
+        .counter-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            cursor: default !important;
+        }
+        
+        .counter-value:hover {
+            filter: none !important;
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            display: block;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            display: block;
+        }
+
+        /* Счётчики в <tfoot> — ТЗ п. 5.1–5.3 */
+        #counterFoot {
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+            background: #f5f5f5;
+        }
+        #counterFoot td {
+            background: #f5f5f5;
+            font-weight: bold;
+            cursor: default !important;
+        }
+        #counterFoot .counter-foot-label {
+            text-align: right !important;
+            padding-right: 15px !important;
+        }
+        #counterFoot td:hover {
+            filter: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">График работы инженеров _v6.1 <span id="headerMonthYear"></span></div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label for="month">Месяц:</label>
+                    <input type="number" id="month" onchange="onMonthInputChanged()" value="10">
+                </div>
+                
+                <div class="control-group">
+                    <label for="year">Год:</label>
+                    <input type="number" id="year" onchange="onYearInputChanged()" value="2026">
+                </div>
+                
+                <div class="file-input-wrapper">
+                    <button id="loadRepertoireBtn">Загрузить Репертуар</button>
+                    <input type="file" id="fileInput" accept=".xlsx,.xls">
+                </div>
+                
+                <div class="control-group">
+                    <label for="gsheetUrl">График на Google:</label>
+                    <input type="text" id="gsheetUrl" placeholder="URL Web App" style="width: 250px;">
+                </div>
+
+                <button id="exportBtn">Опубликовать в Гугл-таблицах</button>
+                <button id="generateBtn" onclick="saveToFile()">Сохранить</button><button id="reportBtn" onclick="showReportTab()" style="background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.3s; margin-left: 10px;" onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">Подготовить отчет</button>
+            </div>
+            
+            <div id="status" class="status"></div>
+
+
+
+        </div>
+        
+        <div class="table-container">
+            <table id="scheduleTable">
+                <thead>
+                    <tr>
+                        <th>Число</th>
+                        <th>День</th>
+                        <th>БС</th>
+                        <th>МС</th>
+                        <th>КС</th>
+                        <th>ЗРК</th>
+                        <th>ТГ</th>
+                        <th>ИНЖ1</th>
+                        <th>ИНЖ2</th>
+                        <th>ИНЖ3</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+                <tfoot id="counterFoot">
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Баллы инж (день):</td>
+                        <td class="counter-foot-value" data-daily-type="ballInj" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-daily-type="ballInj" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-daily-type="ballInj" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Баллы тех (день):</td>
+                        <td class="counter-foot-value" data-daily-type="ballTech" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-daily-type="ballTech" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-daily-type="ballTech" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Баллы инж:</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballInj" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Баллы тех:</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="ballTech" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                    <tr>
+                        <td class="counter-foot-label" colspan="7">Рабочих дней:</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj1">0</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj2">0</td>
+                        <td class="counter-foot-value" data-counter-type="workdays" data-engineer="inj3">0</td>
+                        <td class="counter-foot-status"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+    <div class="instruction" style="margin: 10px 0; padding: 10px; background: #f0f8ff; border-left: 4px solid #4a90e2; font-size: 13px; line-height: 1.5;">
+        <strong>Инструкция по работе с калькулятором:</strong><br>
+        1. Загрузите файл Repertuar_Two_coefficients.xlsx - в нем содержится информация о баллах за проведение спектаклей и таблица готовности инженера вести спектакль<br>
+	   Если в ячейке на пересечении названия спектакля и колонке инженера стоит "+" - инженер может вести спектакль самостоятельно.<br> 
+           Если У0-спектакль отсмотрен,У1-инженер участвовал в монтаже оборудования и наблюдал за проведением,У2-инженер вел спектакль под руководством наставника.<br>
+           Признаки У1,У2,У3 - проставляются в таблицу Repertuar_Two_coefficients для визуального контроля за прогрессом обучения инженеров.<br>
+        2. При вводе расписания спектаклей - оранжевым цветом окрашиваются только те ячейки, названия спектаклей в которых имеются в таблице репертуара (т.е. обслуживаются видеоинженерами).<br>
+        3. Если на одной площадке идут два спектакля — их названия надо разделить знаком "+". Пример: СНЕЖНАЯ КОРОЛЕВА 11:30 + ТЕАТРАЛЬНЫЙ РОМАН<br>
+	4. Время начала спектакля вводится в формате  14:30, либо просто 14. По умолчанию начало спектакля на БС - 19 час. на МС - 19:30, в ЗРК - в 16 час.<br>
+        4. В ячейки инженеров вписываются индексы площадок (БС,МС и т.д.). Если инженер работает в этот день на нескольких площадках — индексы разделять знаком "+". Пример: БС+МС+ЗРК<br>
+        5. Если инженер работает на одном из двух спектаклей площадки — применяются индексы у/ - утро и в/-вечер. Например: у/БС+у/ЗРК<br>
+	6. При правильном назначении инженеров на спектакли (умеет ли инженер вести спектакль, достаточно ли инженеров назначено на спектакль и т.д.) ячейки с названиями
+	 спектаклей будут перекрашиваться в желтый цвет. При неправильной расстановке - ячейки останутся оранжевыми, а в колонке "статус" появится предупреждение<br>
+	7. Внизу калькулятора имеются счетчики суммарных баллов за проведение спектаклей и количество рабочих дней каждого работника.
+    </div>
+    </div>
+
+<div id="reportTab" style="display: none; margin-top: 20px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;" class="no-print">
+<div>
+<h2 id="reportTitle" style="margin: 0; font-size: 20px;">Отчет по надбавкам</h2>
+<p id="reportPeriod" style="margin: 5px 0 0 0; color: #666; font-size: 14px;"></p>
+</div>
+<div style="display: flex; gap: 10px;">
+<button onclick="showScheduleTab()" style="background: #6c757d;">Вернуться к графику</button>
+<button onclick="exportReportToXLSX()" style="background: #17a2b8;">Сохранить отчет (XLSX)</button>
+<button onclick="window.print()" style="background: #ffc107; color: #000;">Предпросмотр / Печать</button>
+</div>
+</div>
+<div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px; border: 1px solid #ddd;" class="no-print">
+<label style="font-weight: 500; margin-right: 15px;">Цена балла инж: <input type="number" id="reportPriceInj" value="950" style="width: 80px; padding: 5px;" onchange="updateReportPrices()"></label>
+<label style="font-weight: 500;">Цена балла тех: <input type="number" id="reportPriceTech" value="815" style="width: 80px; padding: 5px;" onchange="updateReportPrices()"></label>
+</div>
+<div class="table-container" style="max-height: none; border: 1px solid #ddd;">
+<table id="reportTable" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+<thead>
+<tr>
+<th rowspan="2" style="border: 1px solid #ddd; padding: 6px;">МЕСЯЦ</th>
+<th rowspan="2" style="border: 1px solid #ddd; padding: 6px;">ЧИСЛО</th>
+<th rowspan="2" style="border: 1px solid #ddd; padding: 6px;">СЦЕНА</th>
+<th rowspan="2" style="border: 1px solid #ddd; padding: 6px;">СПЕКТАКЛЬ</th>
+<th colspan="2" style="border: 1px solid #ddd; padding: 6px;">ИНЖ 1</th>
+<th colspan="2" style="border: 1px solid #ddd; padding: 6px;">ИНЖ 2</th>
+<th colspan="2" style="border: 1px solid #ddd; padding: 6px;">ИНЖ 3</th>
+<th rowspan="2" style="border: 1px solid #ddd; padding: 6px;">Кол-во работников</th>
+<th rowspan="2" style="border: 1px solid #ddd; padding: 6px;">Сумма баллов</th>
+</tr>
+<tr>
+<th style="border: 1px solid #ddd; padding: 6px;">инж</th>
+<th style="border: 1px solid #ddd; padding: 6px;">тех</th>
+<th style="border: 1px solid #ddd; padding: 6px;">инж</th>
+<th style="border: 1px solid #ddd; padding: 6px;">тех</th>
+<th style="border: 1px solid #ddd; padding: 6px;">инж</th>
+<th style="border: 1px solid #ddd; padding: 6px;">тех</th>
+</tr>
+</thead>
+<tbody id="reportTableBody"></tbody>
+<tfoot id="reportTableFoot" style="background: #f5f5f5; font-weight: bold;">
+<tr>
+<td colspan="4" style="border: 1px solid #ddd; padding: 6px; text-align: right;">Итого по позициям, баллы</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumBallInj1">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumBallTech1">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumBallInj2">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumBallTech2">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumBallInj3">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumBallTech3">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;"></td>
+<td style="border: 1px solid #ddd; padding: 6px;"></td>
+</tr>
+<tr>
+<td colspan="4" style="border: 1px solid #ddd; padding: 6px; text-align: right;">Итого по позициям, рубли</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumRubInj1">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumRubTech1">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumRubInj2">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumRubTech2">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumRubInj3">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;" id="sumRubTech3">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;"></td>
+<td style="border: 1px solid #ddd; padding: 6px;"></td>
+</tr>
+<tr>
+<td colspan="4" style="border: 1px solid #ddd; padding: 6px; text-align: right;">Итого в сумме, рубли</td>
+<td colspan="2" style="border: 1px solid #ddd; padding: 6px; text-align: center;" id="sumTotal1">0</td>
+<td colspan="2" style="border: 1px solid #ddd; padding: 6px; text-align: center;" id="sumTotal2">0</td>
+<td colspan="2" style="border: 1px solid #ddd; padding: 6px; text-align: center;" id="sumTotal3">0</td>
+<td style="border: 1px solid #ddd; padding: 6px;"></td>
+<td style="border: 1px solid #ddd; padding: 6px;"></td>
+</tr>
+</tfoot>
+</table>
+</div>
+<h3 style="margin-top: 30px; font-size: 16px;">Справочник репертуара (обслуживаемые спектакли)</h3>
+<div class="table-container" style="max-height: none; border: 1px solid #ddd; margin-top: 10px;">
+<table id="repertoireRefTable" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+<thead>
+<tr>
+<th style="border: 1px solid #ddd; padding: 6px;">№</th>
+<th style="border: 1px solid #ddd; padding: 6px;">Наименование</th>
+<th style="border: 1px solid #ddd; padding: 6px;">Видеоинженер сложность</th>
+<th style="border: 1px solid #ddd; padding: 6px;">Видеоинженер кол-во</th>
+<th style="border: 1px solid #ddd; padding: 6px;">работа техника сложность</th>
+<th style="border: 1px solid #ddd; padding: 6px;">работа техника кол-во</th>
+<th style="border: 1px solid #ddd; padding: 6px;">предельное количество людей</th>
+<th style="border: 1px solid #ddd; padding: 6px;">предельное количество баллов</th>
+</tr>
+</thead>
+<tbody id="repertoireRefBody"></tbody>
+</table>
+</div>
+</div>
+
+    <script>
+        // Глобальное состояние
+        let currentMonth = 10;
+        let currentYear = 2026;
+        let scheduleData = [];
+        let repertoire = {}; // Ключ: название в UPPERCASE, значение: объект {ball_inj, ball_tech, eng_count, zn1, zn2, zn3}
+        let currentCell = null;
+
+        const DAYS_OF_WEEK = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+        const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                       'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromLocalStorage();
+            generateTable();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Слушатель удален, так как кнопка теперь использует onclick="saveToFile()" в HTML-разметке
+            document.getElementById('loadRepertoireBtn').addEventListener('click', () => {
+                document.getElementById('fileInput').click();
+            });
+            document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+            document.getElementById('exportBtn').addEventListener('click', exportToGoogleSheets);
+            document.getElementById('gsheetUrl').addEventListener('change', saveToLocalStorage);
+
+            // Вставка из буфера обмена (Excel/Google Sheets) — ЗАДАНИЕ 12
+            document.addEventListener('paste', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+                if (!currentCell || !currentCell.classList.contains('editable')) return;
+                e.preventDefault();
+                const text = e.clipboardData.getData('text/plain');
+                if (!text) return;
+                const lines = text.split(/\r\n|\r|\n/);
+                const startRow = parseInt(currentCell.dataset.row);
+                const startCol = parseInt(currentCell.dataset.col);
+                const updatedRows = new Set();
+                lines.forEach((line, lineIdx) => {
+                    if (!line.trim()) return;
+                    const cells = line.split('\t');
+                    cells.forEach((cellValue, cellIdx) => {
+                        const targetRow = startRow + lineIdx;
+                        const targetCol = startCol + cellIdx;
+                        if (targetRow > 34) return;
+                        if (targetCol < 2 || targetCol > 9) return;
+                        const targetCell = document.querySelector('td[data-row="' + targetRow + '"][data-col="' + targetCol + '"]');
+                        if (targetCell) {
+                            targetCell.textContent = cellValue.trim();
+                            saveCellData(targetCell);
+                            updatedRows.add(targetRow);
+                        }
+                    });
+                });
+                updatedRows.forEach(r => recalculateRow(r));
+            });
+            
+            // Глобальная обработка клавиш
+            document.addEventListener('keydown', handleKeyboardNavigation);
+        }
+
+        function saveToFile() {
+            const baseFileName = `График работы инженеров_${MONTHS[currentMonth - 1]}_${currentYear}`;
+
+            // 1. Сохранение JSON
+            const jsonFileName = `${baseFileName}.json`;
+            const dataToSave = {
+                currentMonth: currentMonth,
+                currentYear: currentYear,
+                scheduleData: scheduleData,
+                gsheetUrl: document.getElementById('gsheetUrl').value
+            };
+            const jsonString = JSON.stringify(dataToSave, null, 2);
+            const jsonBlob = new Blob([jsonString], { type: 'application/json' });
+            const jsonUrl = URL.createObjectURL(jsonBlob);
+            const jsonLink = document.createElement('a');
+            jsonLink.href = jsonUrl;
+            jsonLink.download = jsonFileName;
+            document.body.appendChild(jsonLink);
+            jsonLink.click();
+            document.body.removeChild(jsonLink);
+            URL.revokeObjectURL(jsonUrl);
+
+            // 2. Сохранение Excel (XLSX) с сохранением цветов ячеек
+            setTimeout(() => {
+                const xlsxFileName = `${baseFileName}.xlsx`;
+                const table = document.getElementById('scheduleTable');
+                // Временно добавляем inline-стили background-color ко всем ячейкам (SheetJS читает только inline-стили)
+                const allCells = table.querySelectorAll('td, th');
+                const originalStyles = [];
+                allCells.forEach((cell, index) => {
+                    const computedStyle = window.getComputedStyle(cell);
+                    const bgColor = computedStyle.backgroundColor;
+                    originalStyles[index] = cell.getAttribute('style') || '';
+                    if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+                        cell.style.backgroundColor = bgColor;
+                    }
+                });
+                // Экспортируем с inline-стилями
+                const wb = XLSX.utils.table_to_book(table, { sheet: "График", cellStyles: true });
+                XLSX.writeFile(wb, xlsxFileName);
+                // Восстанавливаем исходные стили
+                allCells.forEach((cell, index) => {
+                    if (originalStyles[index]) {
+                        cell.setAttribute('style', originalStyles[index]);
+                    } else {
+                        cell.removeAttribute('style');
+                    }
+                });
+                showStatus(`Файлы "${jsonFileName}" и "${xlsxFileName}" сохранены`, 'success');
+            }, 500);
+        }
+
+        function generateTable() {
+            const saved = localStorage.getItem('engineerSchedule');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && parsed.years && typeof parsed.years === 'object') {
+                        if (parsed.years[currentYear] && parsed.years[currentYear][currentMonth]) {
+                            scheduleData = parsed.years[currentYear][currentMonth];
+                        } else {
+                            scheduleData = [];
+                        }
+                    } else if (parsed && parsed.months && typeof parsed.months === 'object') {
+                        if ((parsed.year || currentYear) === currentYear && parsed.months[currentMonth]) {
+                            scheduleData = parsed.months[currentMonth];
+                        } else {
+                            scheduleData = [];
+                        }
+                    } else if (parsed && Array.isArray(parsed.scheduleData)) {
+                        if ((parsed.currentMonth || currentMonth) === currentMonth && (parsed.currentYear || currentYear) === currentYear) {
+                            scheduleData = parsed.scheduleData;
+                        } else {
+                            scheduleData = [];
+                        }
+                    } else {
+                        scheduleData = [];
+                    }
+                } catch (e) {
+                    scheduleData = [];
+                }
+            } else {
+                scheduleData = [];
+            }
+
+            currentMonth = parseInt(document.getElementById('month').value);
+            currentYear = parseInt(document.getElementById('year').value);
+
+            if (!currentMonth || currentMonth < 1 || currentMonth > 12) {
+                showStatus('Неверный месяц', 'error');
+                return;
+            }
+            
+            const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+            
+            // Инициализируем массив данных, если он пустой или относится к другому месяцу/году
+            if (scheduleData.length > 0 && (scheduleData[0].month !== currentMonth || scheduleData[0].year !== currentYear)) {
+                scheduleData = [];
+            }
+            
+            // Создаем 35 строк (31 день + 4 резервные)
+            for (let i = 0; i < 35; i++) {
+                const row = document.createElement('tr');
+                const dayNumber = i + 1;
+                
+                if (dayNumber <= daysInMonth) {
+                    const date = new Date(currentYear, currentMonth - 1, dayNumber);
+                    const dayOfWeek = DAYS_OF_WEEK[date.getDay()];
+                    
+                    // Ячейка с числом
+                    const dateCell = document.createElement('td');
+                    dateCell.className = 'col-date';
+                    dateCell.textContent = dayNumber;
+                    row.appendChild(dateCell);
+                    
+                    // Ячейка с днем недели
+                    const dayCell = document.createElement('td');
+                    dayCell.className = 'col-day';
+                    dayCell.textContent = dayOfWeek;
+                    row.appendChild(dayCell);
+                    
+                    // Ячейки площадок и инженеров
+                    const columns = ['bs', 'ms', 'ks', 'zrk', 'tg', 'inj1', 'inj2', 'inj3'];
+                    columns.forEach((col, idx) => {
+                        const cell = document.createElement('td');
+                        cell.className = `col-${col} editable`;
+                        cell.contentEditable = true;
+                        cell.dataset.row = i;
+                        cell.dataset.col = idx + 2; // +2 потому что первые 2 колонки - число и день
+                        cell.dataset.type = col;
+                        
+                        // Загружаем сохраненные данные строго для текущего месяца и года
+                        const savedData = scheduleData.find(d => d.day === dayNumber && d.column === col && d.month === currentMonth && d.year === currentYear);
+                        if (savedData) {
+                            cell.textContent = savedData.value;
+                        }
+                        
+                        cell.addEventListener('click', () => { currentCell = cell; placeCaretAtEnd(cell); if (col === 'inj1' || col === 'inj2' || col === 'inj3') { updateDailyCounters(i, col); } });
+                        
+                        cell.addEventListener('blur', () => {
+                            saveCellData(cell);
+                        });
+                        
+                        row.appendChild(cell);
+                    });
+                    
+                    // Ячейка статуса (колонка K)
+                    const statusCell = document.createElement('td');
+                    statusCell.className = 'col-status';
+                    statusCell.dataset.row = i;
+                    statusCell.dataset.col = 10;
+                    statusCell.dataset.type = 'status';
+                    statusCell.contentEditable = false;
+                    row.appendChild(statusCell);
+                } else {
+                    // Пустые строки
+                    row.className = 'empty-row';
+                    for (let j = 0; j < 11; j++) {
+                        const cell = document.createElement('td');
+                        if (j === 0) {
+                            cell.className = 'col-date';
+                        } else if (j === 1) {
+                            cell.className = 'col-day';
+                        } else if (j === 10) {
+                            cell.className = 'col-status';
+                        } else {
+                            cell.className = `col-${['bs', 'ms', 'ks', 'zrk', 'tg', 'inj1', 'inj2', 'inj3'][j-2]}`;
+                        }
+                        cell.textContent = '';
+                        row.appendChild(cell);
+                    }
+                }
+                
+                tableBody.appendChild(row);
+            }
+            
+            // Обновляем заголовок в шапке интерфейса
+            const headerMonthYear = document.getElementById('headerMonthYear');
+            if (headerMonthYear) {
+                headerMonthYear.textContent = `${MONTHS[currentMonth - 1]} ${currentYear}`;
+            }
+
+            showStatus(`Таблица сгенерирована для ${MONTHS[currentMonth - 1]} ${currentYear}`, 'success');
+        }
+
+        function onMonthInputChanged() {
+            let m = parseInt(document.getElementById('month').value, 10);
+            if (isNaN(m)) {
+                m = currentMonth;
+            }
+            let y = currentYear;
+            while (m > 12) {
+                m -= 12;
+                y += 1;
+            }
+            while (m < 1) {
+                m += 12;
+                y -= 1;
+            }
+            currentMonth = m;
+            currentYear = y;
+            document.getElementById('month').value = m;
+            document.getElementById('year').value = y;
+            generateTable();
+        }
+
+        function onYearInputChanged() {
+            let y = parseInt(document.getElementById('year').value, 10);
+            if (isNaN(y)) {
+                y = currentYear;
+            }
+            currentYear = y;
+            document.getElementById('year').value = y;
+            generateTable();
+        }
+
+        function saveCellData(cell) {
+            const row = parseInt(cell.dataset.row);
+            const col = cell.dataset.type;
+            const value = cell.textContent.trim();
+            const dayNumber = row + 1;
+            
+            // Удаляем старую запись
+            scheduleData = scheduleData.filter(d => !(d.day === dayNumber && d.column === col));
+            
+            // Добавляем новую если есть значение
+            if (value) {
+                scheduleData.push({
+                    day: dayNumber,
+                    column: col,
+                    value: value,
+                    month: currentMonth,
+                    year: currentYear
+                });
+            }
+            
+            saveToLocalStorage();
+
+            // Комплексный пересчёт строки: статус, цвета площадок, цвета инженеров
+            recalculateRow(row);
+        }
+
+        function handleKeyboardNavigation(e) {
+            if (!currentCell || !currentCell.classList.contains('editable')) return;
+
+            // 1. Alt + Стрелки: разрешаем стандартное поведение браузера (движение курсора внутри текста)
+            if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                return; // Не делаем preventDefault, браузер сам подвинет курсор в тексте
+            }
+            if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                return;
+            }
+
+            // 2. Delete: полная очистка ячейки
+            if (e.key === 'Delete') {
+                e.preventDefault();
+                currentCell.textContent = '';
+                saveCellData(currentCell);
+                recalculateRow(parseInt(currentCell.dataset.row));
+                return;
+            }
+
+            // 3. Enter: завершить редактирование и перейти на ячейку ниже
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                currentCell.blur();
+                navigateCell(1, 0);
+                return;
+            }
+
+            // 4. Tab: завершить и перейти вправо
+            if (e.key === 'Tab' && !e.shiftKey) {
+                e.preventDefault();
+                currentCell.blur();
+                navigateCell(0, 1);
+                return;
+            }
+
+            // 5. Shift + Tab: завершить и перейти влево
+            if (e.key === 'Tab' && e.shiftKey) {
+                e.preventDefault();
+                currentCell.blur();
+                navigateCell(0, -1);
+                return;
+            }
+
+            // 6. Обычные стрелки (без Alt): навигация между ячейками
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                currentCell.blur();
+                let dRow = 0, dCol = 0;
+                if (e.key === 'ArrowRight') dCol = 1;
+                if (e.key === 'ArrowLeft') dCol = -1;
+                if (e.key === 'ArrowDown') dRow = 1;
+                if (e.key === 'ArrowUp') dRow = -1;
+                navigateCell(dRow, dCol);
+                return;
+            }
+        }
+
+        function navigateCell(dRow, dCol) {
+            const currentRow = parseInt(currentCell.dataset.row);
+            const currentCol = parseInt(currentCell.dataset.col);
+            const targetRow = currentRow + dRow;
+            const targetCol = currentCol + dCol;
+            const nextCell = document.querySelector('td[data-row="' + targetRow + '"][data-col="' + targetCol + '"]');
+            if (nextCell) {
+                nextCell.focus();
+                placeCaretAtEnd(nextCell);
+                currentCell = nextCell;
+            }
+        }
+
+        function placeCaretAtEnd(el) {
+            el.focus();
+            if (window.getSelection && document.createRange) {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    
+                    processRepertoireData(jsonData);
+                    showStatus('Репертуар успешно загружен', 'success');
+                } catch (error) {
+                    showStatus('Ошибка при загрузке файла: ' + error.message, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processRepertoireData(data) {
+            repertoire = {};
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (!row || row.length === 0) continue;
+                const name = row[0];
+                if (!name) continue;
+                const normalizedName = name.toString().toUpperCase().replace(/[“”«»’’'']/g, '').trim();
+                if (!normalizedName) continue;
+                const ball_inj = parseFloat(row[1]) || 0;
+                const ball_tech = parseFloat(row[2]) || 0;
+                const eng_count = parseInt(row[3]) || 1;
+                const zn1 = row[4] ? row[4].toString().trim() : '+';
+                const zn2 = row[5] ? row[5].toString().trim() : '+';
+                const zn3 = row[6] ? row[6].toString().trim() : '+';
+                repertoire[normalizedName] = {
+                    ball_inj: ball_inj,
+                    ball_tech: ball_tech,
+                    eng_count: eng_count,
+                    zn1: zn1,
+                    zn2: zn2,
+                    zn3: zn3
+                };
+            }
+            console.log('Репертуар загружен:', repertoire);
+            showStatus(`Репертуар загружен: ${Object.keys(repertoire).length} спектаклей`, 'success');
+            recalculateAllRows();
+        }
+
+        function getCellColor(cell) {
+            // Получаем цвет фона ячейки: сначала inline style, потом базовый цвет из класса
+            if (cell.style.backgroundColor && cell.style.backgroundColor !== '') {
+                return cell.style.backgroundColor;
+            }
+            // Базовые цвета для колонок инженеров
+            const baseColors = {
+                'inj1': '#e8f5e9',
+                'inj2': '#ffe8e1',
+                'inj3': '#fffde7'
+            };
+            const type = cell.dataset.type;
+            if (baseColors[type]) {
+                return baseColors[type];
+            }
+            // Для остальных ячеек - белый
+            return '#ffffff';
+        }
+
+        function exportToGoogleSheets() {
+            const gsheetUrl = document.getElementById('gsheetUrl').value.trim();
+            if (!gsheetUrl) {
+                alert('Пожалуйста, введите URL Web App в поле "График на Google"');
+                return;
+            }
+            // Принудительный пересчет всех цветов перед экспортом
+            recalculateAllRows();
+            const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+            const table = document.getElementById('scheduleTable');
+            const data = [];
+            // Название таблицы
+            const title = 'График работы инженеров _v6.1';
+            data.push([title, '', '', '', '', '', '', '', '', '', '']);
+            // Месяц и год
+            const month = document.getElementById('month').value;
+            const year = document.getElementById('year').value;
+            data.push(['Месяц: ' + month + ', Год: ' + year, '', '', '', '', '', '', '', '', '', '']);
+            // Собираем заголовки (без колонки Статус - индекс 10)
+            const headers = [];
+            table.querySelectorAll('th').forEach((th, index) => {
+                if (index < 10) {
+                    headers.push(th.textContent);
+                }
+            });
+            // Собираем данные строк (только дни месяца, без счетчиков и резервных строк)
+            const rows = [];
+            const tbodyRows = table.querySelectorAll('tbody tr');
+            for (let i = 0; i < daysInMonth; i++) {
+                const tr = tbodyRows[i];
+                if (!tr) continue;
+                const rowData = [];
+                const cells = tr.querySelectorAll('td');
+                cells.forEach((td, index) => {
+                    if (index < 10) {
+                        rowData.push({
+                            text: td.textContent.trim(),
+                            bg: getCellColor(td)
+                        });
+                    }
+                });
+                rows.push(rowData);
+            }
+            // Формируем имя листа и метаданные
+            const sheetName = `${MONTHS[currentMonth - 1]}_${currentYear}`;
+            console.log("Отправляем данные на лист:", sheetName);
+            const payload = {
+                sheetName: sheetName,
+                title: 'График работы видеоинженеров',
+                subtitle: `${MONTHS[currentMonth - 1]} ${currentYear}`,
+                headers: headers,
+                rows: rows
+            };
+            fetch(gsheetUrl, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showStatus(`Данные успешно отправлены на лист "${sheetName}"`, 'success');
+                } else {
+                    throw new Error(data.message || 'Ошибка сервера');
+                }
+            })
+            .catch(error => {
+                showStatus('Ошибка отправки: ' + error.message, 'error');
+                console.error('Export error:', error);
+            });
+        }
+
+        function saveToLocalStorage() {
+            const gsheetUrl = document.getElementById('gsheetUrl') ? document.getElementById('gsheetUrl').value : '';
+            let masterData = { years: {}, gsheetUrl: '' };
+            const saved = localStorage.getItem('engineerSchedule');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && parsed.years && typeof parsed.years === 'object') {
+                        masterData = parsed;
+                    } else if (parsed && parsed.months && typeof parsed.months === 'object') {
+                        const y = parsed.year || currentYear;
+                        masterData.years[y] = parsed.months;
+                        masterData.gsheetUrl = parsed.gsheetUrl || '';
+                    } else if (parsed && Array.isArray(parsed.scheduleData)) {
+                        const y = parsed.currentYear || currentYear;
+                        const m = parsed.currentMonth || currentMonth;
+                        masterData.years[y] = {};
+                        masterData.years[y][m] = parsed.scheduleData;
+                        masterData.gsheetUrl = parsed.gsheetUrl || '';
+                    }
+                } catch (e) {
+                    console.error('Ошибка чтения localStorage, создаём новую структуру:', e);
+                }
+            }
+            if (!masterData.years || typeof masterData.years !== 'object') {
+                masterData.years = {};
+            }
+            if (!masterData.years[currentYear] || typeof masterData.years[currentYear] !== 'object') {
+                masterData.years[currentYear] = {};
+            }
+            masterData.years[currentYear][currentMonth] = scheduleData;
+            masterData.lastMonth = currentMonth;
+            masterData.lastYear = currentYear;
+            masterData.gsheetUrl = gsheetUrl;
+            localStorage.setItem('engineerSchedule', JSON.stringify(masterData));
+        }
+
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('engineerSchedule');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && parsed.years && typeof parsed.years === 'object') {
+                        currentYear = parsed.lastYear || currentYear;
+                        currentMonth = parsed.lastMonth || currentMonth;
+                        if (parsed.years[currentYear] && parsed.years[currentYear][currentMonth]) {
+                            scheduleData = parsed.years[currentYear][currentMonth];
+                        } else {
+                            scheduleData = [];
+                        }
+                        if (parsed.gsheetUrl) {
+                            document.getElementById('gsheetUrl').value = parsed.gsheetUrl;
+                        }
+                    } else if (parsed && parsed.months && typeof parsed.months === 'object') {
+                        currentYear = parsed.year || currentYear;
+                        if (parsed.months[currentMonth]) {
+                            scheduleData = parsed.months[currentMonth];
+                        } else {
+                            scheduleData = [];
+                        }
+                        if (parsed.gsheetUrl) {
+                            document.getElementById('gsheetUrl').value = parsed.gsheetUrl;
+                        }
+                    } else if (parsed && Array.isArray(parsed.scheduleData)) {
+                        currentMonth = parsed.currentMonth || currentMonth;
+                        currentYear = parsed.currentYear || currentYear;
+                        scheduleData = parsed.scheduleData;
+                        if (parsed.gsheetUrl) {
+                            document.getElementById('gsheetUrl').value = parsed.gsheetUrl;
+                        }
+                    } else {
+                        scheduleData = [];
+                    }
+                } catch (e) {
+                    console.error('Ошибка загрузки из localStorage:', e);
+                }
+            }
+            document.getElementById('month').value = currentMonth;
+            document.getElementById('year').value = currentYear;
+            // КРИТИЧЕСКИ ВАЖНО: После загрузки данных (или если их нет) обязательно генерируем таблицу
+            generateTable();
+            // Обновляем заголовок в шапке после загрузки
+            const headerMonthYear = document.getElementById('headerMonthYear');
+            if (headerMonthYear) {
+                headerMonthYear.textContent = `${MONTHS[currentMonth - 1]} ${currentYear}`;
+            }
+        }
+
+        function parseTimeFromEvent(eventName) {
+            // Извлекает время из названия события (например, "РЕП 12" -> {hour:12, minute:0})
+            if (!eventName) return null;
+
+            // Ищем паттерн времени: число с возможными : или . и минутами
+            const match = eventName.match(/(\d{1,2})[:.](\d{1,2})/);
+            if (match) {
+                return { hour: parseInt(match[1]), minute: parseInt(match[2]) };
+            }
+
+            const matchHour = eventName.match(/(\d{1,2})$/);
+            if (matchHour) {
+                return { hour: parseInt(matchHour[1]), minute: 0 };
+            }
+
+            return null; // время не найдено
+        }
+
+        function isMorningSlot(timeObj) {
+            // Утро: до 15:30 включительно
+            if (!timeObj) return false;
+            if (timeObj.hour < 15) return true;
+            if (timeObj.hour === 15 && timeObj.minute <= 30) return true;
+            return false;
+        }
+
+        function isEveningSlot(hour) {
+            // Вечер: после 15:30
+            return hour !== null && hour > 15;
+        }
+
+        function parseVenueEvents(venueValue) {
+            // Парсит ячейку площадки на отдельные события
+            // Пример: "ГАМЛЕТ 19 + ОТЕЛЛО 20" -> [{name:"ГАМЛЕТ", hour:19}, {name:"ОТЕЛЛО", hour:20}]
+            if (!venueValue) return [];
+            const parts = venueValue.split('+').map(p => p.trim());
+            const events = [];
+            let lastValidName = null;
+            parts.forEach(part => {
+                if (!part) return;
+                // Случай: только время (например, "19" или "19:00") — относится к последнему названию
+                const timeOnlyMatch = part.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+                if (timeOnlyMatch) {
+                    if (lastValidName) {
+                        const hour = parseInt(timeOnlyMatch[1]);
+                        const minute = timeOnlyMatch[2] ? parseInt(timeOnlyMatch[2]) : 0;
+                        events.push({ name: lastValidName, hour: hour, minute: minute, raw: part });
+                    }
+                    return;
+                }
+                // Случай: название + возможно время
+                const match = part.match(/^([А-ЯЁA-Z0-9\s-]+?)(?:\s+(\d{1,2})(?::(\d{1,2}))?)?$/i);
+                if (match) {
+                    const name = match[1].trim().toUpperCase().replace(/[“”«»’’'']/g, '');
+                    const hour = match[2] ? parseInt(match[2]) : null;
+                    const minute = match[3] ? parseInt(match[3]) : 0;
+                    if (name) {
+                        lastValidName = name;
+                        events.push({ name: name, hour: hour, minute: minute, raw: part });
+                    }
+                }
+            });
+            return events;
+        }
+
+        function checkAssignmentRules(rowIndex) {
+            // Проверяет правила расстановки инженеров для всех событий в строке
+            // Возвращает массив объектов {type: 'error'|'info', message: string}
+            const warnings = [];
+            // Собираем все события площадок этой строки
+            const allVenueEvents = [];
+            ['bs', 'ms', 'ks', 'zrk', 'tg'].forEach(venueCode => {
+                const venueCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${venueCode}"]`);
+                if (venueCell) {
+                    const venueValue = venueCell.textContent.trim();
+                    const venueEvents = parseVenueEvents(venueValue);
+                    venueEvents.forEach(event => {
+                        const timeObj = event.hour !== null ? { hour: event.hour, minute: event.minute || 0 } : null;
+                        allVenueEvents.push({
+                            venue: venueCode,
+                            name: event.name,
+                            hour: event.hour,
+                            minute: event.minute || 0,
+                            slot: isMorningSlot(timeObj) ? 'morning' : 'evening'
+                        });
+                    });
+                }
+            });
+            // Для каждого события проверяем назначенных инженеров
+            allVenueEvents.forEach(event => {
+                const repData = repertoire[event.name];
+                if (!repData) return;
+                const engCount = repData.eng_count;
+                // Собираем назначенных инженеров на это событие (с учётом слота и площадки)
+                const assignedEngineers = [];
+                ['inj1', 'inj2', 'inj3'].forEach((engCol, engIndex) => {
+                    const engCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${engCol}"]`);
+                    if (!engCell) return;
+                    const engValue = engCell.textContent.trim().toUpperCase();
+                    const engParts = engValue.split('+').map(p => p.trim());
+                    const engAssignments = [];
+                    engParts.forEach(engPart => {
+                        if (!engPart) return;
+                        let engSlot = 'evening';
+                        let cleanEngPart = engPart;
+                        if (engPart.startsWith('У/')) {
+                            engSlot = 'morning';
+                            cleanEngPart = engPart.substring(2).trim();
+                        } else if (engPart.startsWith('В/')) {
+                            engSlot = 'evening';
+                            cleanEngPart = engPart.substring(2).trim();
+                        }
+                        const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
+                        let engVenue = '';
+                        for (const [rus, code] of Object.entries(venueMap)) {
+                            if (cleanEngPart.includes(rus)) {
+                                engVenue = code;
+                                break;
+                            }
+                        }
+                        // КРИТИЧЕСКИ ВАЖНО: инженер назначается на событие только если совпадают И площадка, И временной слот
+                        if (engVenue === event.venue && engSlot === event.slot) {
+                            engAssignments.push({ slot: engSlot });
+                        }
+                    });
+                    const matchingAssignment = engAssignments.length > 0;
+                    if (matchingAssignment) {
+                        const znKey = `zn${engIndex + 1}`;
+                        const znValue = repData[znKey];
+                        assignedEngineers.push({
+                            engineer: engCol,
+                            engineerIndex: engIndex + 1,
+                            knowledge: znValue
+                        });
+                    }
+                });
+                // Если никто не назначен — пропускаем (это не ошибка расстановки)
+                if (assignedEngineers.length === 0) return;
+                // Подсчитываем опытных (+) и учеников (0, 1, 2)
+                const experienced = assignedEngineers.filter(e => e.knowledge === '+');
+                const students = assignedEngineers.filter(e => e.knowledge !== '+' && e.knowledge !== undefined);
+                // БЛОКИРУЮЩАЯ ОШИБКА 1: Нет опытного
+                if (experienced.length === 0) {
+                    assignedEngineers.forEach(eng => {
+                        warnings.push({
+                            type: 'error',
+                            venue: event.venue,
+                            message: `инж${eng.engineerIndex}: ОПЫТ ${eng.knowledge} (недопустимо)`
+                        });
+                    });
+                    return; // дальше не проверяем — уже блокирующая ошибка
+                }
+                // БЛОКИРУЮЩАЯ ОШИБКА 2: Второй лишний (eng_count = 1, два и более профи — лишний второй)
+                if (engCount === 1) {
+                    const plusCount = assignedEngineers.filter(eng => eng.knowledge === '+').length;
+                    if (plusCount >= 2) {
+                        warnings.push({
+                            type: 'error',
+                            venue: event.venue,
+                            message: 'Второй лишний'
+                        });
+                        return;
+                    }
+                }
+                // БЛОКИРУЮЩАЯ ОШИБКА 3: Третий лишний (eng_count = 2, назначено 3, все опытные)
+                if (engCount === 2 && assignedEngineers.length === 3) {
+                    // Считаем, сколько из троих назначенных инженеров имеют статус "+"
+                    const plusCount = assignedEngineers.filter(eng => eng.knowledge === '+').length;
+                    // Ошибка "Третий лишний" ТОЛЬКО если все трое имеют статус "+"
+                    if (plusCount === 3) {
+                        warnings.push({
+                            type: 'error',
+                            venue: event.venue,
+                            message: 'Третий лишний'
+                        });
+                        return;
+                    }
+                    // Если plusCount < 3 (например, 2 плюса + 1 ученик), ошибки НЕТ — это норма по ТЗ п. 5.5
+                }
+                // ИНФОРМАЦИОННЫЕ СООБЩЕНИЯ: ученики под руководством опытного
+                students.forEach(eng => {
+                    warnings.push({
+                        type: 'info',
+                        message: `инж${eng.engineerIndex}: ОПЫТ ${eng.knowledge}`
+                    });
+                });
+            });
+            return warnings;
+        }
+
+        function updateRowStatus(rowIndex) {
+            // Вызывает проверку расстановки и обновляет ячейку «Статус»
+            const warnings = checkAssignmentRules(rowIndex);
+            const statusCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="status"]`);
+            if (!statusCell) return;
+            if (warnings.length === 0) {
+                statusCell.innerHTML = '';
+                statusCell.classList.remove('status-error');
+                return;
+            }
+            const hasError = warnings.some(w => w.type === 'error');
+            statusCell.innerHTML = warnings.map(w => w.message).join('<br>');
+            if (hasError) {
+                statusCell.classList.add('status-error');
+            } else {
+                statusCell.classList.remove('status-error');
+            }
+        }
+
+        function recalculateRow(rowIndex) {
+            updateRowStatus(rowIndex);
+            updateVenueColors(rowIndex);
+            updateEngineerColors(rowIndex);
+            updateFootCounters();
+        }
+
+        // Расчёт баллов инженера по строке — ТЗ п. 5 (Задание 5, v3.7)
+        function calculateEngineerPoints(rowIndex, engIndex) {
+            // engIndex: 1..3 (ИНЖ1, ИНЖ2, ИНЖ3)
+            const engCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="inj${engIndex}"]`);
+            if (!engCell) return { ballInj: 0, ballTech: 0, hasValidEvent: false };
+            const engText = engCell.textContent.trim();
+            if (!engText) return { ballInj: 0, ballTech: 0, hasValidEvent: false };
+
+            const parts = engText.split('+').filter(p => p.trim());
+            let totalBallInj = 0;
+            let totalBallTech = 0;
+            let hasValid = false;
+
+            parts.forEach(part => {
+                const trimmed = part.trim();
+                if (!trimmed) return;
+                let slot = 'evening';
+                let name = trimmed;
+                if (trimmed.startsWith('У/') || trimmed.startsWith('у/')) {
+                    slot = 'morning';
+                    name = trimmed.substring(2);
+                } else if (trimmed.startsWith('В/') || trimmed.startsWith('в/')) {
+                    slot = 'evening';
+                    name = trimmed.substring(2);
+                }
+                const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
+                let hasVenue = false;
+                for (const v of Object.keys(venueMap)) {
+                    if (name.toUpperCase().includes(v)) {
+                        hasVenue = true;
+                        break;
+                    }
+                }
+                if (!hasVenue) {
+                    // НЕЗАВИСИМОЕ СОБЫТИЕ (например, МОНТ) — начисляем полные баллы
+                    const repData = repertoire[name.toUpperCase()];
+                    if (repData) {
+                        hasValid = true;
+                        totalBallInj += repData.ball_inj || 0;
+                        totalBallTech += repData.ball_tech || 0;
+                    }
+                    return;
+                }
+                let venueKey = '';
+                for (const key in venueMap) {
+                    if (name.toUpperCase().startsWith(key)) {
+                        venueKey = key;
+                        break;
+                    }
+                }
+                if (!venueKey) return;
+
+                const venueCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${venueMap[venueKey]}"]`);
+                if (!venueCell) return;
+                const venueEvents = parseVenueEvents(venueCell.textContent);
+                let matchedRep = null;
+                for (const ev of venueEvents) {
+                    if (ev.hour === null) {
+                        const defaultTimes = { 'БС': 19, 'МС': 19.5, 'ЗРК': 16 };
+                        ev.hour = defaultTimes[venueKey] || 19;
+                        ev.minute = 0;
+                    }
+                    const evName = ev.name.toUpperCase();
+                    if (repertoire[evName]) {
+                        matchedRep = repertoire[evName];
+                        break;
+                    }
+                }
+                if (matchedRep) {
+                    hasValid = true;
+                    const rep = matchedRep;
+                    const znKey = `zn${engIndex}`;
+                    const engStatus = rep[znKey];
+                    const isExperienced = engStatus === '+' || engStatus === 'plus';
+
+                    const assigned = [];
+                    for (let i = 1; i <= 3; i++) {
+                        const otherCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="inj${i}"]`);
+                        if (!otherCell) continue;
+                        const otherText = otherCell.textContent.trim();
+                        if (!otherText) continue;
+                        const otherParts = otherText.split('+').filter(p => p.trim());
+                        otherParts.forEach(op => {
+                            const opTrimmed = op.trim();
+                            if (!opTrimmed) return;
+                            let otherOpName = opTrimmed;
+                            if (opTrimmed.startsWith('У/') || opTrimmed.startsWith('у/')) {
+                                otherOpName = opTrimmed.substring(2);
+                            } else if (opTrimmed.startsWith('В/') || opTrimmed.startsWith('в/')) {
+                                otherOpName = opTrimmed.substring(2);
+                            }
+                            if (otherOpName.toUpperCase().includes(venueKey)) {
+                                const otherZnKey = `zn${i}`;
+                                const otherStatus = rep[otherZnKey];
+                                const otherIsExp = otherStatus === '+' || otherStatus === 'plus';
+                                assigned.push({ isExperienced: otherIsExp });
+                            }
+                        });
+                    }
+
+                    const engCount = rep.eng_count;
+                    const studentCount = assigned.filter(a => !a.isExperienced).length;
+
+                    let injMult = 1;
+                    let techMult = 1;
+                    if (!isExperienced) {
+                        if (engCount === 1) {
+                            injMult = 0.5;
+                            techMult = 0.5;
+                        } else if (engCount === 2) {
+                            if (studentCount === 1) {
+                                injMult = 1;
+                                techMult = 1;
+                            } else if (studentCount === 2) {
+                                injMult = 0.5;
+                                techMult = 0.5;
+                            }
+                        }
+                    }
+
+                    totalBallInj += rep.ball_inj * injMult;
+                    totalBallTech += rep.ball_tech * techMult;
+                }
+            });
+
+            return { ballInj: totalBallInj, ballTech: totalBallTech, hasValidEvent: hasValid };
+        }
+
+        // Пересчёт счётчиков в <tfoot> — ТЗ п. 5.1–5.3 (Задание 5, v3.7)
+        function updateFootCounters() {
+            const injCells = document.querySelectorAll('tfoot td[data-counter-type="ballInj"]');
+            const techCells = document.querySelectorAll('tfoot td[data-counter-type="ballTech"]');
+            const daysCells = document.querySelectorAll('tfoot td[data-counter-type="workdays"]');
+            injCells.forEach(c => c.textContent = '0');
+            techCells.forEach(c => c.textContent = '0');
+            daysCells.forEach(c => c.textContent = '0');
+
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach((row, rowIndex) => {
+                for (let engIndex = 1; engIndex <= 3; engIndex++) {
+                    const result = calculateEngineerPoints(rowIndex, engIndex);
+                    const injCell = document.querySelector(`tfoot td[data-counter-type="ballInj"][data-engineer="inj${engIndex}"]`);
+                    if (injCell) {
+                        const current = parseFloat(injCell.textContent) || 0;
+                        injCell.textContent = (current + result.ballInj).toFixed(1);
+                    }
+                    const techCell = document.querySelector(`tfoot td[data-counter-type="ballTech"][data-engineer="inj${engIndex}"]`);
+                    if (techCell) {
+                        const current = parseFloat(techCell.textContent) || 0;
+                        techCell.textContent = (current + result.ballTech).toFixed(1);
+                    }
+                    if (result.hasValidEvent) {
+                        const daysCell = document.querySelector(`tfoot td[data-counter-type="workdays"][data-engineer="inj${engIndex}"]`);
+                        if (daysCell) {
+                            const current = parseInt(daysCell.textContent) || 0;
+                            daysCell.textContent = (current + 1).toString();
+                        }
+                    }
+                }
+            });
+        }
+
+        function countAssignedEngineers(rowIndex, venueCode, slot, eventName) {
+            // Считает, сколько инженеров назначено на событие (по площадке, слоту и названию)
+            let count = 0;
+            const eventSlot = slot || 'evening';
+            ['inj1', 'inj2', 'inj3'].forEach(engCol => {
+                const engCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${engCol}"]`);
+                if (!engCell) return;
+                const engValue = engCell.textContent.trim().toUpperCase();
+                const engParts = engValue.split('+').map(p => p.trim());
+                engParts.forEach(engPart => {
+                    if (!engPart) return;
+                    let engSlot = 'evening';
+                    let cleanEngPart = engPart;
+                    if (engPart.startsWith('У/')) {
+                        engSlot = 'morning';
+                        cleanEngPart = engPart.substring(2).trim();
+                    } else if (engPart.startsWith('В/')) {
+                        engSlot = 'evening';
+                        cleanEngPart = engPart.substring(2).trim();
+                    }
+                    const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
+                    let engVenue = '';
+                    for (const [rus, code] of Object.entries(venueMap)) {
+                        if (cleanEngPart.includes(rus)) {
+                            engVenue = code;
+                            break;
+                        }
+                    }
+                    if (engVenue === venueCode && engSlot === eventSlot) {
+                        count++;
+                    }
+                });
+            });
+            return count;
+        }
+
+        function updateVenueColors(rowIndex) {
+            // Окрашивание ячеек площадок (ТЗ п. 4.3.4, Задание 4)
+            const warnings = checkAssignmentRules(rowIndex);
+            ['bs', 'ms', 'ks', 'zrk', 'tg'].forEach(venueCode => {
+                const venueCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${venueCode}"]`);
+                if (!venueCell) return;
+
+                const venueValue = venueCell.textContent.trim();
+                const events = parseVenueEvents(venueValue);
+
+                venueCell.style.backgroundColor = '';
+                venueCell.style.color = '';
+
+                if (events.length === 0) {
+                    venueCell.style.backgroundColor = '#ffffff';
+                    venueCell.style.color = '#000000';
+                    return;
+                }
+
+                let foundCount = 0;
+                let hasAnyPoints = false; // Новое: есть ли баллы (инж ИЛИ тех)
+
+                events.forEach(event => {
+                    const repData = repertoire[event.name];
+                    if (repData) {
+                        foundCount = foundCount + 1;
+                        if (repData.ball_inj > 0 || repData.ball_tech > 0) {
+                            hasAnyPoints = true; // Если есть хоть какие-то баллы, событие считается полноценным
+                        }
+                    }
+                });
+
+                if (foundCount === 0) {
+                    venueCell.style.backgroundColor = '#ffffff';
+                    venueCell.style.color = '#000000';
+                } else if (warnings.some(w => w.type === 'error' && w.venue === venueCode)) {
+                    venueCell.style.backgroundColor = '#ffcc80';
+                    venueCell.style.color = '#000000';
+                } else {
+                    let fullCoverage = true;
+                    events.forEach(event => {
+                        const repData = repertoire[event.name];
+                        if (!repData) {
+                            return;
+                        }
+                        const timeObj = event.hour !== null ? { hour: event.hour, minute: event.minute || 0 } : null;
+                        const eventSlot = isMorningSlot(timeObj) ? 'morning' : 'evening';
+                        const assignedCount = countAssignedEngineers(rowIndex, venueCode, eventSlot, event.name);
+                        if (assignedCount < repData.eng_count) {
+                            fullCoverage = false;
+                        }
+                    });
+
+                    if (fullCoverage && hasAnyPoints) {
+                        venueCell.style.backgroundColor = '#fff9c4'; // Жёлтый: событие валидно и даёт баллы (инж или тех)
+                        venueCell.style.color = '#000000';
+                    } else if (fullCoverage && !hasAnyPoints) {
+                        venueCell.style.backgroundColor = '#ffffff'; // Белый с оранжевым: событие есть, но баллов 0 вообще
+                        venueCell.style.color = '#ff6d00';
+                    } else {
+                        venueCell.style.backgroundColor = '#ffcc80';
+                        venueCell.style.color = '#000000';
+                    }
+                }
+            });
+        }
+
+        function updateEngineerColors(rowIndex) {
+            const warnings = checkAssignmentRules(rowIndex);
+            // Окрашивание ячеек инженеров (Задание 4):
+            // слот совпал И ball_inj > 0 -> жёлтый; слот совпал И ball_inj = 0 -> базовый цвет + оранжевый текст;
+            // слот не совпал -> розовый фон + оранжевый текст
+            const baseColors = {
+                'inj1': '#e8f5e9',
+                'inj2': '#ffe8e1',
+                'inj3': '#fffde7'
+            };
+            ['inj1', 'inj2', 'inj3'].forEach((engCol, engIndex) => {
+                const engCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${engCol}"]`);
+                if (!engCell) return;
+
+                const engValue = engCell.textContent.trim().toUpperCase();
+
+                engCell.style.backgroundColor = baseColors[engCol];
+                engCell.style.color = '#000000';
+
+                if (!engValue) {
+                    return;
+                }
+
+                const engParts = engValue.split('+').map(p => p.trim());
+                let hasValidEvent = false;
+                let allBallInjZero = true;
+                
+
+                engParts.forEach(engPart => {
+                    if (!engPart) return;
+                    let engSlot = 'evening';
+                    let cleanEngPart = engPart;
+                    if (engPart.startsWith('У/')) {
+                        engSlot = 'morning';
+                        cleanEngPart = engPart.substring(2).trim();
+                    } else if (engPart.startsWith('В/')) {
+                        engSlot = 'evening';
+                        cleanEngPart = engPart.substring(2).trim();
+                    }
+
+                    const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' };
+                    let engVenue = '';
+                    for (const [rus, code] of Object.entries(venueMap)) {
+                        if (cleanEngPart.includes(rus)) {
+                            engVenue = code;
+                            break;
+                        }
+                    }
+
+                    if (!engVenue) return;
+
+                    const venueCell = document.querySelector(`td[data-row="${rowIndex}"][data-type="${engVenue}"]`);
+                    if (!venueCell) return;
+
+                    const venueValue = venueCell.textContent.trim();
+                    const events = parseVenueEvents(venueValue);
+
+                    events.forEach(event => {
+                        const repData = repertoire[event.name];
+                        if (repData) {
+                            hasValidEvent = true;
+                            if (repData.ball_inj > 0) {
+                                allBallInjZero = false;
+                            }
+                        }
+                    });
+                });
+
+                let hasSlotError = false;
+                let isFault = hasSlotError; if (!isFault && hasValidEvent) { const engVenues = []; engParts.forEach(engPart => { if (!engPart) return; let cleanEngPart = engPart; if (engPart.startsWith('У/') || engPart.startsWith('у/')) cleanEngPart = engPart.substring(2).trim(); else if (engPart.startsWith('В/') || engPart.startsWith('в/')) cleanEngPart = engPart.substring(2).trim(); const venueMap = { 'БС': 'bs', 'МС': 'ms', 'КС': 'ks', 'ЗРК': 'zrk', 'ТГ': 'tg' }; for (const [rus, code] of Object.entries(venueMap)) { if (cleanEngPart.includes(rus)) { engVenues.push(code); break; } } }); engVenues.forEach(v => { if (warnings.some(w => w.type === 'error' && w.venue === v)) isFault = true; }); } if (isFault) { engCell.style.backgroundColor = '#ffcc80'; engCell.style.color = '#000000'; } else { engCell.style.backgroundColor = baseColors[engCol]; engCell.style.color = '#000000'; }
+            });
+        }
+
+        function recalculateAllRows() {
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach((row, rowIndex) => {
+                recalculateRow(rowIndex);
+            });
+            updateFootCounters();
+        }
+
+        function updateDailyCounters(rowIndex, engCol) {
+            const engIndex = parseInt(engCol.replace('inj', ''));
+            const result = calculateEngineerPoints(rowIndex, engIndex);
+            const injCell = document.querySelector('tfoot td[data-daily-type="ballInj"][data-engineer="' + engCol + '"]');
+            if (injCell) injCell.textContent = result.ballInj.toFixed(1);
+            const techCell = document.querySelector('tfoot td[data-daily-type="ballTech"][data-engineer="' + engCol + '"]');
+            if (techCell) techCell.textContent = result.ballTech.toFixed(1);
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            
+            setTimeout(() => {
+                status.className = 'status';
+            }, 3000);
+        }
+
+        function showReportTab() {
+            document.querySelector('.table-container').style.display = 'none';
+            document.querySelector('.instruction').style.display = 'none';
+            document.getElementById('reportTab').style.display = 'block';
+            const monthNames = ['', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+            const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+            document.getElementById('reportTitle').textContent = `Отчет по надбавкам за период ${monthNames[prevMonth]} - ${monthNames[currentMonth]} ${currentYear}`;
+            document.getElementById('reportPeriod').textContent = `Период: с 21 ${monthNames[prevMonth].toLowerCase()} по 20 ${monthNames[currentMonth].toLowerCase()} ${currentYear}`;
+            const savedPriceInj = localStorage.getItem('price_ball_inj');
+            const savedPriceTech = localStorage.getItem('price_ball_tech');
+            document.getElementById('reportPriceInj').value = savedPriceInj || 950;
+            document.getElementById('reportPriceTech').value = savedPriceTech || 815;
+            generateReportData();
+        }
+
+        function showScheduleTab() {
+            document.getElementById('reportTab').style.display = 'none';
+            document.querySelector('.table-container').style.display = 'block';
+            document.querySelector('.instruction').style.display = 'block';
+        }
+
+        function updateReportPrices() {
+            localStorage.setItem('price_ball_inj', document.getElementById('reportPriceInj').value);
+            localStorage.setItem('price_ball_tech', document.getElementById('reportPriceTech').value);
+            generateReportData();
+        }
+
+        function generateReportData() {
+            const priceInj = parseFloat(document.getElementById('reportPriceInj').value) || 950;
+            const priceTech = parseFloat(document.getElementById('reportPriceTech').value) || 815;
+            const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+            const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '';
+            const usedRepertoire = {};
+            const totals = { ballInj1: 0, ballTech1: 0, ballInj2: 0, ballTech2: 0, ballInj3: 0, ballTech3: 0 };
+            const monthNames = ['', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            const prevMonthData = [];
+            const saved = localStorage.getItem('engineerSchedule');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.years && parsed.years[prevYear] && parsed.years[prevYear][prevMonth]) {
+                        const monthData = parsed.years[prevYear][prevMonth];
+                        monthData.forEach(d => {
+                            if (d.day >= 21) {
+                                prevMonthData.push(d);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Ошибка загрузки данных предыдущего месяца:', e);
+                }
+            }
+            const allRows = document.querySelectorAll('#tableBody tr');
+            console.log('generateReportData вызвана. Здесь будет логика парсинга периода 21-20, проверки слотов и расчета баллов.');
+            document.getElementById('reportTableBody').innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 20px;">Данные отчета формируются (логика будет добавлена следующим шагом)</td></tr>';
+        }
+
+        function exportReportToXLSX() {
+            alert('Функция экспорта отчета в XLSX будет реализована следующим шагом с использованием библиотеки SheetJS.');
+        }
+    </script>
+</body>
+</html>
