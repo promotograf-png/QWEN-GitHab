@@ -4,7 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>График работы инженеров _v9.1</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <script>
+        window.addEventListener('load', function() {
+            if (typeof XLSX === 'undefined') {
+                alert('ОШИБКА: Библиотека xlsx-js-style не загружена! Проверьте интернет-соединение.');
+            } else if (XLSX.version && XLSX.version !== '1.2.0') {
+                console.warn('ВНИМАНИЕ: Загружена версия XLSX', XLSX.version, 'вместо 1.2.0. Стили могут не работать.');
+            } else {
+                console.log('Библиотека xlsx-js-style версии', XLSX.version, 'загружена успешно.');
+            }
+        });
+    </script>
     <style>
         * {
             margin: 0;
