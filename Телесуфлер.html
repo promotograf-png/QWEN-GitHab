@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Телесуфлер</title>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; height: 100vh; background: #1a1a1a; color: #ddd; overflow: hidden; display: flex; }
+  
+  #sidebar {
+    width: 240px; background: #2a2a2a; padding: 15px; overflow-y: auto;
+    border-right: 1px solid #444; flex-shrink: 0;
+  }
+  #sidebar h2 { margin-bottom: 15px; font-size: 16px; color: #fff; }
+  #sidebar h3 { margin: 12px 0 6px; font-size: 12px; color: #aaa; text-transform: uppercase; }
+  
+  .control-group { margin-bottom: 12px; }
+  .control-group label { display: block; margin-bottom: 4px; font-size: 11px; }
+  .control-group input[type="file"] { width: 100%; font-size: 10px; }
+  .control-group select, .control-group input[type="color"] {
+    width: 100%; padding: 4px; background: #1a1a1a; color: #ddd; border: 1px solid #555; font-size: 11px;
+  }
+  
+  button {
+    width: 100%; padding: 10px; margin: 4px 0; background: #4a4a4a; color: #fff;
+    border: none; cursor: pointer; font-size: 13px; border-radius: 4px;
+  }
+  button:hover { background: #5a5a5a; }
+  button.primary { background: #2d6a9f; }
+  button.primary:hover { background: #3d7abf; }
+  
+  #main-area {
+    flex: 1; display: flex; flex-direction: column; padding: 15px; min-width: 0;
+  }
+  
+  #viewer-wrapper {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: #000; position: relative; overflow: hidden; min-height: 0;
+  }
+  
+  #viewer {
+    width: 100%; height: 100%;
+    background: #000; overflow: hidden; position: relative;
+  }
+  
+  #text-container {
+    position: absolute; width: 100%; padding: 3% 5%;
+    font-size: 5vh; line-height: 1.4; color: #fff;
+    opacity: 0; transition: opacity 1s ease-in;
+    will-change: transform;
+  }
+  #text-container.visible { opacity: 1; }
+  
+  #controls-below {
+    display: flex; gap: 15px; padding: 15px 0 0 0; align-items: center;
+    flex-shrink: 0;
+  }
+  #controls-below .control-group { flex: 1; margin: 0; }
+  #controls-below label { font-size: 11px; margin-bottom: 4px; }
+  #controls-below input[type="range"] { width: 100%; }
+  
+  .hint { font-size: 10px; color: #888; margin-top: 4px; }
+  .warning { font-size: 10px; color: #ff9800; margin-top: 4px; }
+  
+  body.projection-mode #sidebar,
+  body.projection-mode #controls-below {
+    display: none;
+  }
+  body.projection-mode #main-area {
+    padding: 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>Телесуфлер</h2>
+  
+  <h3>Загрузка файла</h3>
+  <div class="control-group">
+    <label>Word (.docx):</label>
+    <input type="file" id="docx-input" accept=".docx">
+    <div class="warning">⚠ Форматирование Word переносится частично</div>
+  </div>
+  <div class="control-group">
+    <label>HTML (идеальное форматирование):</label>
+    <input type="file" id="html-input" accept=".html,.htm">
+    <div class="hint">Сохраните в Word как "Веб-страница"</div>
+  </div>
+  <div class="control-group">
+    <label>Текст (.txt):</label>
+    <input type="file" id="txt-input" accept=".txt">
+    <select id="encoding-select">
+      <option value="UTF-8">UTF-8</option>
+      <option value="windows-1251">Windows-1251</option>
+      <option value="KOI8-R">KOI8-R</option>
+    </select>
+  </div>
+  
+  <h3>Цвета</h3>
+  <div class="control-group">
+    <label>Текст:</label>
+    <input type="color" id="text-color" value="#ffffff">
+  </div>
+  <div class="control-group">
+    <label>Фон:</label>
+    <input type="color" id="bg-color" value="#000000">
+  </div>
+  
+  <h3>Шрифт</h3>
+  <div class="control-group">
+    <label>Размер: <span id="font-size-val">5</span>vh</label>
+    <input type="range" id="font-size" min="2" max="15" step="0.5" value="5">
+  </div>
+  <div class="control-group">
+    <select id="font-family">
+      <option value="Arial">Arial</option>
+      <option value="Georgia">Georgia</option>
+      <option value="Times New Roman">Times New Roman</option>
+      <option value="Verdana">Verdana</option>
+      <option value="Courier New">Courier New</option>
+    </select>
+  </div>
+  
+  <h3>Управление</h3>
+  <button id="start-btn" class="primary">Старт</button>
+  
+  <div class="hint" style="margin-top: 15px;">
+    В режиме проекции:<br>
+    ↑↓ или колесо мыши — скорость<br>
+    Пробел — старт/пауза<br>
+    Escape — выход
+  </div>
+</div>
+
+<div id="main-area">
+  <div id="viewer-wrapper">
+    <div id="viewer">
+      <div id="text-container"></div>
+    </div>
+  </div>
+  
+  <div id="controls-below">
+    <div class="control-group">
+      <label>Скорость: <span id="speed-val">2</span> px/кадр</label>
+      <input type="range" id="speed" min="0" max="10" step="0.5" value="2">
+    </div>
+  </div>
+</div>
+
+<script>
+const textContainer = document.getElementById('text-container');
+const viewer = document.getElementById('viewer');
+let scrollPos = 0;
+let speed = 2;
+let isScrolling = false;
+let animationId = null;
+let slaveWindow = null;
+
+const channel = new BroadcastChannel('teleprompter_sync');
+
+// Открываем второе окно сразу при загрузке
+function openSlaveWindow() {
+  if (!slaveWindow || slaveWindow.closed) {
+    slaveWindow = window.open('', '_blank', 'width=1920,height=1080');
+    slaveWindow.document.write(`
+      <!DOCTYPE html>
+      <html><head><title>Телесуфлер - экран</title>
+      <style>
+        * { margin: 0; padding: 0; }
+        body { background: #000; overflow: hidden; }
+        #viewer { width: 100vw; height: 100vh; background: #000; overflow: hidden; position: relative; }
+        #tc { position: absolute; width: 100%; padding: 3% 5%; font-size: 5vh; line-height: 1.4; color: #fff; opacity: 0; transition: opacity 1s; will-change: transform; }
+        #tc.visible { opacity: 1; }
+        #hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #888; font-family: Arial; font-size: 18px; background: rgba(0,0,0,0.8); padding: 20px 30px; border-radius: 10px; text-align: center; }
+      </style>
+      </head>
+      <body>
+        <div id="hint">Окно готово к работе<br><br>Нажмите F11 для полного экрана<br>или кликните здесь</div>
+        <div id="viewer">
+          <div id="tc"></div>
+        </div>
+        <script>
+          const tc = document.getElementById('tc');
+          const viewer = document.getElementById('viewer');
+          const hint = document.getElementById('hint');
+          const channel = new BroadcastChannel('teleprompter_sync');
+          
+          document.body.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+            }
+            hint.style.display = 'none';
+          });
+          
+          channel.addEventListener('message', (e) => {
+            const d = e.data;
+            if (d.type === 'html') {
+              tc.innerHTML = d.html;
+              if (!tc.classList.contains('visible')) {
+                setTimeout(() => tc.classList.add('visible'), 100);
+              }
+            } else if (d.type === 'settings') {
+              tc.style.color = d.textColor;
+              tc.style.fontSize = d.fontSize;
+              tc.style.fontFamily = d.fontFamily;
+              viewer.style.background = d.bgColor;
+            } else if (d.type === 'scroll') {
+              tc.style.transform = 'translate3d(0, ' + d.scrollPos + 'px, 0)';
+            } else if (d.type === 'stop') {
+              hint.style.display = 'block';
+              hint.innerHTML = 'Окно готово к работе<br><br>Нажмите F11 для полного экрана<br>или кликните здесь';
+              tc.classList.remove('visible');
+              tc.innerHTML = '';
+            }
+          });
+        </script>
+      </body></html>
+    `);
+    slaveWindow.document.close();
+  }
+}
+
+// Открываем второе окно при загрузке страницы
+window.addEventListener('load', () => {
+  setTimeout(openSlaveWindow, 500);
+});
+
+function broadcastHTML() {
+  channel.postMessage({ type: 'html', html: textContainer.innerHTML });
+}
+function broadcastSettings() {
+  channel.postMessage({
+    type: 'settings',
+    textColor: document.getElementById('text-color').value,
+    bgColor: document.getElementById('bg-color').value,
+    fontSize: document.getElementById('font-size').value + 'vh',
+    fontFamily: document.getElementById('font-family').value
+  });
+}
+function broadcastScroll() {
+  channel.postMessage({ type: 'scroll', scrollPos, speed, isScrolling });
+}
+
+document.getElementById('docx-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.convertToHtml({ arrayBuffer });
+  textContainer.innerHTML = result.value;
+  scrollPos = window.innerHeight;
+  textContainer.style.transform = `translate3d(0, ${scrollPos}px, 0)`;
+  setTimeout(() => textContainer.classList.add('visible'), 100);
+  broadcastHTML();
+});
+
+document.getElementById('html-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(ev.target.result, 'text/html');
+    textContainer.innerHTML = doc.body.innerHTML;
+    scrollPos = window.innerHeight;
+    textContainer.style.transform = `translate3d(0, ${scrollPos}px, 0)`;
+    setTimeout(() => textContainer.classList.add('visible'), 100);
+    broadcastHTML();
+  };
+  reader.readAsText(file, 'UTF-8');
+});
+
+document.getElementById('txt-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const encoding = document.getElementById('encoding-select').value;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const text = ev.target.result;
+    textContainer.innerHTML = '<p>' + text.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+    scrollPos = window.innerHeight;
+    textContainer.style.transform = `translate3d(0, ${scrollPos}px, 0)`;
+    setTimeout(() => textContainer.classList.add('visible'), 100);
+    broadcastHTML();
+  };
+  reader.readAsText(file, encoding);
+});
+
+document.getElementById('text-color').addEventListener('input', (e) => {
+  textContainer.style.color = e.target.value;
+  broadcastSettings();
+});
+document.getElementById('bg-color').addEventListener('input', (e) => {
+  viewer.style.background = e.target.value;
+  broadcastSettings();
+});
+document.getElementById('font-size').addEventListener('input', (e) => {
+  textContainer.style.fontSize = e.target.value + 'vh';
+  document.getElementById('font-size-val').textContent = e.target.value;
+  broadcastSettings();
+});
+document.getElementById('font-family').addEventListener('change', (e) => {
+  textContainer.style.fontFamily = e.target.value;
+  broadcastSettings();
+});
+document.getElementById('speed').addEventListener('input', (e) => {
+  speed = parseFloat(e.target.value);
+  document.getElementById('speed-val').textContent = speed;
+  broadcastScroll();
+});
+
+function scroll() {
+  if (!isScrolling) return;
+  scrollPos -= speed;
+  textContainer.style.transform = `translate3d(0, ${scrollPos}px, 0)`;
+  broadcastScroll();
+  animationId = requestAnimationFrame(scroll);
+}
+
+function exitProjectionMode() {
+  document.body.classList.remove('projection-mode');
+  isScrolling = false;
+  cancelAnimationFrame(animationId);
+  channel.postMessage({ type: 'stop' });
+}
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  if (!slaveWindow || slaveWindow.closed) {
+    openSlaveWindow();
+    setTimeout(() => {
+      broadcastHTML();
+      broadcastSettings();
+      broadcastScroll();
+    }, 500);
+  }
+  
+  document.body.classList.add('projection-mode');
+  document.documentElement.requestFullscreen().catch(() => {});
+  
+  isScrolling = true;
+  scroll();
+});
+
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && document.body.classList.contains('projection-mode')) {
+    exitProjectionMode();
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (document.body.classList.contains('projection-mode')) {
+      e.preventDefault();
+      exitProjectionMode();
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    }
+    return;
+  }
+  
+  if (!document.body.classList.contains('projection-mode')) return;
+  
+  if (e.key === 'ArrowUp') {
+    speed = Math.min(10, speed + 0.5);
+    document.getElementById('speed').value = speed;
+    document.getElementById('speed-val').textContent = speed;
+    broadcastScroll();
+  }
+  if (e.key === 'ArrowDown') {
+    speed = Math.max(0, speed - 0.5);
+    document.getElementById('speed').value = speed;
+    document.getElementById('speed-val').textContent = speed;
+    broadcastScroll();
+  }
+  if (e.key === ' ') {
+    e.preventDefault();
+    isScrolling = !isScrolling;
+    if (isScrolling) scroll();
+    else cancelAnimationFrame(animationId);
+    broadcastScroll();
+  }
+});
+
+window.addEventListener('wheel', (e) => {
+  if (!document.body.classList.contains('projection-mode')) return;
+  speed = Math.max(0, Math.min(10, speed - e.deltaY * 0.01));
+  document.getElementById('speed').value = speed;
+  document.getElementById('speed-val').textContent = speed.toFixed(1);
+  broadcastScroll();
+});
+</script>
+</body>
+</html>
