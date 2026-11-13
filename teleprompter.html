@@ -215,7 +215,7 @@ function openSlaveWindow() {
               tc.innerHTML = '';
             }
           });
-        <\/script>
+        </script>
       </body></html>
     `);
     slaveWindow.document.close();
@@ -316,7 +316,7 @@ function scroll() {
   textContainer.style.transform = `translate3d(0, ${scrollPos}px, 0)`;
   broadcastScroll();
   animationId = requestAnimationFrame(scroll);
-});
+}
 
 function exitProjectionMode() {
   document.body.classList.remove('projection-mode');
