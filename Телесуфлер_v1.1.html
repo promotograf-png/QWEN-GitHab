@@ -124,6 +124,7 @@
   </div>
   
   <h3>Управление</h3>
+  <button id="open-screen-btn">Открыть второй экран</button>
   <button id="start-btn" class="primary">Старт</button>
   
   <div class="hint" style="margin-top: 15px;">
@@ -164,6 +165,10 @@ const channel = new BroadcastChannel('teleprompter_sync');
 function openSlaveWindow() {
   if (!slaveWindow || slaveWindow.closed) {
     slaveWindow = window.open('', '_blank', 'width=1920,height=1080');
+    if (!slaveWindow) {
+      alert('Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для этой страницы и повторите попытку.');
+      return;
+    }
     slaveWindow.document.write(`
       <!DOCTYPE html>
       <html><head><title>Телесуфлер - экран</title>
@@ -215,7 +220,7 @@ function openSlaveWindow() {
               tc.innerHTML = '';
             }
           });
-        </script>
+        <\/script>
       </body></html>
     `);
     slaveWindow.document.close();
@@ -324,6 +329,15 @@ function exitProjectionMode() {
   cancelAnimationFrame(animationId);
   channel.postMessage({ type: 'stop' });
 }
+
+document.getElementById('open-screen-btn').addEventListener('click', () => {
+  openSlaveWindow();
+  setTimeout(() => {
+    broadcastHTML();
+    broadcastSettings();
+    broadcastScroll();
+  }, 500);
+});
 
 document.getElementById('start-btn').addEventListener('click', () => {
   if (!slaveWindow || slaveWindow.closed) {
